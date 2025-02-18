@@ -120,29 +120,27 @@ const ItemList = () => {
     SearchItems(1, effectiveCategory, search); // 검색 후 첫 페이지를 호출
   };
 
-// API 호출 수정
-const SearchItems = async (page, category = "", search = "") => {
-  const url = `http://localhost:5000/search-items?page=${page}&limit=${itemsPerPage}&category=${category}&search=${search}`;
-  console.log("검색 URL:", url);  // URL 확인
-  try {
-    const response = await axios.get(url);
-    setItems(response.data.items);
-    setTotalItems(response.data.total);
-  } catch (error) {
-    console.error("Error fetching items:", error);
-  }
-};
+  // API 호출 수정
+  const SearchItems = async (page, category = "", search = "") => {
+    const url = `http://localhost:5000/search-items?page=${page}&limit=${itemsPerPage}&category=${category}&search=${search}`;
+    console.log("검색 URL:", url); // URL 확인
+    try {
+      const response = await axios.get(url);
+      setItems(response.data.items);
+      setTotalItems(response.data.total);
+    } catch (error) {
+      console.error("Error fetching items:", error);
+    }
+  };
 
-
-// useEffect에서 검색 조건을 반영하여 데이터를 가져옴
-useEffect(() => {
-  if (searchCategory || searchTerm) {
-    SearchItems(currentPage, searchCategory, searchTerm);
-  } else {
-    fetchItems(currentPage); // 검색이 없으면 기본 항목 가져오기
-  }
-}, [currentPage, searchCategory, searchTerm]); // 페이지, 카테고리, 검색어가 변경되면 새로 불러오기
-
+  // useEffect에서 검색 조건을 반영하여 데이터를 가져옴
+  useEffect(() => {
+    if (searchCategory || searchTerm) {
+      SearchItems(currentPage, searchCategory, searchTerm);
+    } else {
+      fetchItems(currentPage); // 검색이 없으면 기본 항목 가져오기
+    }
+  }, [currentPage, searchCategory, searchTerm]); // 페이지, 카테고리, 검색어가 변경되면 새로 불러오기
 
   return (
     <Container maxWidth="lg">

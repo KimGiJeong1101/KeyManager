@@ -16,9 +16,6 @@ app.get("/items", async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
 
-  console.log(Number(true))
-  console.log(Number(false))
-
   try {
     const totalResult = await pool.query(
       "SELECT COUNT(*) FROM key_win10 WHERE isdelete = 0"
@@ -174,6 +171,9 @@ app.post("/items", async (req, res) => {
     console.error(err);
     res.status(500).send("Server Error");
   }
+
+  console.log("등록 테스트");
+  console.log("등록이 완료되면 표시");
 });
 
 app.put("/items/:no", async (req, res) => {
@@ -190,6 +190,9 @@ app.put("/items/:no", async (req, res) => {
     console.error(err);
     res.status(500).send("Server Error");
   }
+
+  console.log("수정 테스트");
+  console.log("수정이 완료되면 표시");
 });
 
 // DELETE: 항목 삭제하기
@@ -203,6 +206,9 @@ app.delete("/items/:no", async (req, res) => {
     console.error(err);
     res.status(500).send("Server Error");
   }
+
+  console.log("삭제 테스트");
+  console.log("삭제가 완료되면 표시");
 });
 
 app.listen(PORT, () => {
