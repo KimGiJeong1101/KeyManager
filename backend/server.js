@@ -16,164 +16,166 @@ app.get("/items", async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
 
+  const { category, searchField, searchValue } = req.query;
+
   try {
-    const totalResult = await pool.query(
-      "SELECT COUNT(*) FROM key_win10 WHERE isdelete = 0"
-    );
+    let baseQuery = "FROM LICENSE_KEYS WHERE isdelete = 0";
+    let queryParams = [];
 
-    const totalItems = totalResult.rows[0].count;
-
-    // 데이터가 없을 경우 처리
-    if (totalItems === "0") {
-      return res.json({ items: [], total: totalItems });
+    // 1. 카테고리 필터
+    if (category && category !== "allassets") {
+      queryParams.push(category);
+      baseQuery += ` AND category = $${queryParams.length}`;
     }
 
-    // ORDER BY 절 추가
-    const result = await pool.query(
-      "SELECT no, key, member FROM key_win10 WHERE isdelete = 0 ORDER BY no ASC LIMIT $1 OFFSET $2",
-      [limit, offset]
+    // 2. 검색어 필터
+    if (searchValue && searchValue.trim() !== "") {
+      const term = `%${searchValue}%`;
+      if (searchField === "key") {
+        queryParams.push(term);
+        baseQuery += ` AND key ILIKE $${queryParams.length}`;
+      } else if (searchField === "member") {
+        queryParams.push(term);
+        baseQuery += ` AND member ILIKE $${queryParams.length}`;
+      } else {
+        // ALL 검색
+        queryParams.push(term);
+        const idx = queryParams.length;
+        baseQuery += ` AND (key ILIKE $${idx} OR member ILIKE $${idx})`;
+      }
+    }
+
+    // [Step A] 전체 개수 조회
+    const totalResult = await pool.query(
+      `SELECT COUNT(*) ${baseQuery}`,
+      queryParams,
     );
+    const totalItems = parseInt(totalResult.rows[0].count);
+
+    // [Step B] 실제 데이터 조회
+    // limit와 offset을 위해 파라미터 추가
+    // 개선된 방식 (가독성 중심)
+    const finalParams = [...queryParams]; // 기존 검색 조건들 복사
+
+    // LIMIT 추가 및 인덱스 저장
+    finalParams.push(limit);
+    const limitIdx = finalParams.length; // 현재 배열의 길이가 곧 $번호
+
+    // OFFSET 추가 및 인덱스 저장
+    finalParams.push(offset);
+    const offsetIdx = finalParams.length; // 현재 배열의 길이가 곧 $번호
+
+    const dataSql = `
+  SELECT no, key, member, category, version 
+  ${baseQuery} 
+  ORDER BY no ASC 
+  LIMIT $${limitIdx} OFFSET $${offsetIdx}
+`;
+
+    const result = await pool.query(dataSql, finalParams);
 
     res.json({
       items: result.rows,
       total: totalItems,
     });
   } catch (err) {
-    console.error(err);
+    console.error("!!! DB 조회 에러 발생 !!!");
+    console.error(err.message);
     res.status(500).send("Server Error");
   }
 });
 
-app.get("/search-items", async (req, res) => {
-  const category = req.query.category || null; // 카테고리 값 (key, member, null 등)
-  const searchTerm = req.query.search || ""; // 검색어
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const offset = (page - 1) * limit;
+// GET: 카테고리별 자산 통계 가져오기
+app.get("/items/category-stats", async (req, res) => {
+  console.log("\n========================================");
+  console.log("[STATS] 카테고리별 통계 요청 수신");
 
   try {
-    let query = "SELECT COUNT(*) FROM key_win10 WHERE isdelete = 0"; // 데이터 개수를 세는 쿼리
-    let queryParams = []; // 쿼리 파라미터 배열
-    let selectQuery = "SELECT * FROM key_win10 WHERE isdelete = 0"; // 실제 데이터를 가져오는 쿼리
+    const statsQuery = `
+      SELECT
+        CATEGORY,
+        COUNT(*) AS TOTAL,
 
-    // TS query를 위한 파라미터 추가 (to_tsquery에 사용)
-    const searchQuery = `to_tsquery('simple', $1::text)`;
-    queryParams.push(searchTerm); // 첫 번째 파라미터는 searchTerm
+        -- ACTIVE: MEMBER가 NULL 아니고 '사용자없음' 아니고 '' 아닐 때
+        COUNT(*) FILTER (
+          WHERE MEMBER IS NOT NULL
+            AND MEMBER <> '사용자없음'
+            AND MEMBER <> ''
+        ) AS ACTIVE,
 
-    console.log("카테고리 뭐가 넘어오냐 : " + category);
-    console.log("검색어 뭐가 넘어오냐 : " + searchTerm);
+        -- AVAILABLE: MEMBER가 NULL 이거나 '사용자없음' 이거나 '' 일 때
+        COUNT(*) FILTER (
+          WHERE MEMBER IS NULL
+             OR MEMBER = '사용자없음'
+             OR MEMBER = ''
+        ) AS AVAILABLE
 
-    if (category === "key") {
-      // "key" 카테고리일 때만 key 관련 데이터 검색
-      query += " AND (search_vector @@ " + searchQuery + " OR key ILIKE $2)";
-      selectQuery +=
-        " AND (search_vector @@ " + searchQuery + " OR key ILIKE $2)";
-      queryParams.push(`%${searchTerm}%`); // ILIKE에 사용할 검색어 추가
-    } else if (category === "member") {
-      // "member" 카테고리일 때만 member 관련 데이터 검색
-      query += " AND (search_vector @@ " + searchQuery + " OR member ILIKE $2)";
-      selectQuery +=
-        " AND (search_vector @@ " + searchQuery + " OR member ILIKE $2)";
-      queryParams.push(`%${searchTerm}%`); // ILIKE에 사용할 검색어 추가
-    } else if (category === "all") {
-      // "all" 카테고리일 때는 key와 member 모두 검색
-      query += " AND (search_vector @@ " + searchQuery + " OR key ILIKE $2";
-      selectQuery +=
-        " AND (search_vector @@ " + searchQuery + " OR key ILIKE $2";
-      queryParams.push(`%${searchTerm}%`); // key에 대한 검색어 추가
+      FROM LICENSE_KEYS
+      WHERE ISDELETE = 0
+      GROUP BY CATEGORY
+    `;
 
-      // 검색어가 있을 경우에만 member에 대한 조건을 추가
-      if (searchTerm) {
-        query += " OR member ILIKE $3)";
-        selectQuery += " OR member ILIKE $3)";
-        queryParams.push(`%${searchTerm}%`); // member에 대한 검색어 추가
-      } else {
-        query += ")";
-        selectQuery += ")";
-      }
-    } else {
-      // 다른 경우에도 all처럼 key와 member 모두 검색
-      query +=
-        " AND (search_vector @@ " +
-        searchQuery +
-        " OR key ILIKE $2 OR member ILIKE $3)";
-      selectQuery +=
-        " AND (search_vector @@ " +
-        searchQuery +
-        " OR key ILIKE $2 OR member ILIKE $3)";
-      queryParams.push(`%${searchTerm}%`, `%${searchTerm}%`); // key와 member에 대한 검색어 추가
-    }
+    console.log("[SQL] 통계 쿼리 실행 중...");
+    const result = await pool.query(statsQuery);
 
-    console.log("쿼리: ", query);
-    console.log("파라미터: ", queryParams);
+    console.log(`[DB RESULT] 조회된 카테고리 수: ${result.rows.length}개`);
+    if (result.rows.length > 0) console.table(result.rows);
 
-    // 총 데이터 수 조회
-    const totalResult = await pool.query(query, queryParams);
-    const totalItems = parseInt(totalResult.rows[0].count, 10);
+    // PostgreSQL 결과를 JSON 형태로 변환
+    const categoryStats = result.rows.map((row) => ({
+      category: row.category || "미지정",
+      total: parseInt(row.total, 10),
+      active: parseInt(row.active, 10),
+      available: parseInt(row.available, 10),
+    }));
 
-    if (totalItems === 0) {
-      return res.json({ items: [], total: totalItems });
-    }
+    console.log("[JSON] 프론트엔드 전송 데이터:");
+    console.dir(categoryStats, { depth: null });
+    console.log("========================================\n");
 
-    // 페이지네이션 쿼리 부분 수정
-    if (queryParams.length >= 3) {
-      // $3이 존재하는 경우
-      selectQuery += " ORDER BY no ASC LIMIT $4 OFFSET $5";
-      queryParams.push(limit, offset);
-    } else {
-      // $3이 존재하지 않는 경우
-      selectQuery += " ORDER BY no ASC LIMIT $3 OFFSET $4";
-      queryParams.push(limit, offset);
-    }
-
-    console.log("데이터 조회 쿼리: ", selectQuery);
-    console.log("파라미터: ", queryParams);
-
-    // 실제 데이터 조회
-    const result = await pool.query(selectQuery, queryParams);
-
-    res.json({
-      items: result.rows,
-      total: totalItems,
-    });
+    res.json(categoryStats);
   } catch (err) {
-    console.error(err);
+    console.error("!!!!!!!! [ERROR] 통계 조회 중 오류 발생 !!!!!!!!!");
+    console.error(err.stack);
+    console.log("========================================\n");
     res.status(500).send("Server Error");
   }
 });
 
 // POST: 항목 추가하기
 app.post("/items", async (req, res) => {
-  const { key } = req.body;
+  // 1. 리액트에서 보낸 category와 version을 추가로 꺼냅니다.
+  const { key, category, version } = req.body;
 
-  // 유효성 검사: 키가 존재하는지만 확인
-  if (!key) {
-    return res.status(400).json({ error: "키는 필수 항목입니다." });
+  // 유효성 검사 (우리 대문자 규칙 잊지 마세요!)
+  if (!key || !category || !version) {
+    return res
+      .status(400)
+      .json({ error: "키, 카테고리, 버전은 필수 항목입니다." });
   }
 
   try {
     // 중복 확인
     const duplicateCheck = await pool.query(
-      "SELECT * FROM key_win10 WHERE key = $1",
-      [key]
+      "SELECT * FROM LICENSE_KEYS WHERE key = $1",
+      [key],
     );
     if (duplicateCheck.rows.length > 0) {
-      return res.status(400).json({ error: "중복된 키는 저장할 수 없습니다." });
+      return res.status(400).json({ error: "이미 등록된 라이선스 키입니다." });
     }
 
-    // 중복이 아니면 새 키 추가
+    // 2. 쿼리문 수정: CATEGORY와 VERSION 컬럼에 데이터 삽입
     const result = await pool.query(
-      "INSERT INTO key_win10 (key) VALUES ($1) RETURNING *",
-      [key]
+      "INSERT INTO LICENSE_KEYS (key, CATEGORY, VERSION) VALUES ($1, $2, $3) RETURNING *",
+      [key, category, version], // 순서 중요! $1, $2, $3 순서대로 들어갑니다.
     );
+
+    console.log("[DB] 새 데이터 등록 완료:", result.rows[0]);
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    console.error("데이터 등록 오류:", err);
     res.status(500).send("Server Error");
   }
-
-  console.log("등록 테스트");
-  console.log("등록이 완료되면 표시");
 });
 
 app.put("/items/:no", async (req, res) => {
@@ -182,17 +184,14 @@ app.put("/items/:no", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "UPDATE key_win10 SET key = $1, member = $2 WHERE no = $3 RETURNING *",
-      [key, member, no]
+      "UPDATE LICENSE_KEYS SET key = $1, member = $2 WHERE no = $3 RETURNING *",
+      [key, member, no],
     );
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).send("Server Error");
   }
-
-  console.log("수정 테스트");
-  console.log("수정이 완료되면 표시");
 });
 
 // DELETE: 항목 삭제하기
@@ -200,15 +199,14 @@ app.delete("/items/:no", async (req, res) => {
   const { no } = req.params;
 
   try {
-    await pool.query("UPDATE key_win10 SET isdelete = 1 WHERE no = $1", [no]);
+    await pool.query("UPDATE LICENSE_KEYS SET isdelete = 1 WHERE no = $1", [
+      no,
+    ]);
     res.status(204).send();
   } catch (err) {
     console.error(err);
     res.status(500).send("Server Error");
   }
-
-  console.log("삭제 테스트");
-  console.log("삭제가 완료되면 표시");
 });
 
 app.listen(PORT, () => {

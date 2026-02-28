@@ -1,185 +1,220 @@
-// src/components/ItemListDisplay.js (Updated)
-
 import React, { useState } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Button,
-  Paper,
-  TextField,
-  Box,
-  IconButton,
-} from "@mui/material";
-
-import CloseIcon from "@mui/icons-material/Close"; // Close 아이콘 추가
+import CloseIcon from "@mui/icons-material/Close";
+import CheckIcon from "@mui/icons-material/Check";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 
 const ItemListDisplay = ({ items, deleteItem, updateItem }) => {
-  const [editMode, setEditMode] = useState(null); // 현재 수정 중인 항목의 no 값
-  const [editKey, setEditKey] = useState(""); // 수정 중인 key 값
-  const [editMember, setEditMember] = useState(""); // 수정 중인 Member 값
+  const [editMode, setEditMode] = useState(null);
+  const [editKey, setEditKey] = useState("");
+  const [editMember, setEditMember] = useState("");
 
   const handleEdit = (item) => {
-    setEditMode(item.no); // 수정할 항목의 no 값으로 editMode 설정
-    setEditKey(item.key); // 기존 key 값을 인풋 필드에 설정
-    setEditMember(item.member || ""); // 기존 Member 값을 인풋 필드에 설정
+    setEditMode(item.no);
+    setEditKey(item.key);
+    setEditMember(item.member || "");
   };
 
   const handleSave = () => {
-    updateItem(editMode, editKey, editMember); // 부모 컴포넌트로 수정 사항 저장 요청
-    setEditMode(null); // 수정 모드 해제
+    updateItem(editMode, editKey, editMember);
+    setEditMode(null);
   };
 
   const handleKeyDown = (event) => {
-    if (event.key === "Enter") {
-      handleSave();
-    }
+    if (event.key === "Enter") handleSave();
+    if (event.key === "Escape") setEditMode(null);
   };
 
-  return (
-    <TableContainer
-      component={Paper}
-      style={{
-        marginTop: "32px",
-        padding: "16px",
-        marginBottom: "32px",
-        border: "8px solid #f0f0f0",
-      }}
-    >
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell
-              style={{ fontWeight: "bold", backgroundColor: "#f0f0f0" }}
-            >
-              No.
-            </TableCell>
-            <TableCell
-              align="center"
-              style={{ fontWeight: "bold", backgroundColor: "#f0f0f0" }}
-            >
-              Key
-            </TableCell>
-            <TableCell
-              align="center"
-              style={{ fontWeight: "bold", backgroundColor: "#f0f0f0" }}
-            >
-              사용자
-            </TableCell>
-            <TableCell
-              align="center"
-              style={{ fontWeight: "bold", backgroundColor: "#f0f0f0" }}
-            >
-              수정
-            </TableCell>
-            <TableCell
-              align="center"
-              style={{ fontWeight: "bold", backgroundColor: "#f0f0f0" }}
-            >
-              삭제
-            </TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {items.map((item) => (
-            <TableRow key={item.no} hover>
-              <TableCell
-                style={{
-                  fontSize: "16px",
-                  color:
-                    item.member && item.member !== "사용자없음"
-                      ? "#a4a4a4"
-                      : "inherit",
-                }}
-              >
-                {item.no}.
-              </TableCell>
-              {/* 수정 모드일 때 인풋 필드, 아닐 때 텍스트 */}
-              <TableCell
-                align="center"
-                style={{
-                  fontSize: "16px",
-                  fontWeight: "bold",
-                  color:
-                    item.member && item.member !== "사용자없음"
-                      ? "#a4a4a4"
-                      : "inherit",
-                }} // 원하는 크기와 두께로 조정
-              >
-                {item.key}
-              </TableCell>
+  const isAssigned = (member) =>
+    member && member !== "사용자없음" && member !== "";
 
-              <TableCell
-                align="center"
-                style={{
-                  fontSize: "16px",
-                  color:
-                    item.member && item.member !== "사용자없음"
-                      ? "#a4a4a4"
-                      : "inherit",
-                }}
+  return (
+    <div className="w-full overflow-x-auto pb-4 scrollbar-hide">
+      <table className="w-full border-separate border-spacing-y-3">
+        <thead>
+          <tr className="text-slate-400">
+            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.25em] text-center w-24">
+              Index
+            </th>
+            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.25em] text-left">
+              License Identifier
+            </th>
+            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.25em] text-center">
+              Status / Assignee
+            </th>
+            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.25em] text-right pr-10">
+              Management
+            </th>
+          </tr>
+        </thead>
+
+        <tbody className="before:leading-[0.1rem] before:block">
+          {items.map((item) => {
+            const assigned = isAssigned(item.member);
+            const isEditing = editMode === item.no;
+
+            return (
+              <tr
+                key={item.no}
+                className={`group transition-all duration-300 ${
+                  isEditing ? "translate-x-1" : ""
+                }`}
               >
-                {editMode === item.no ? (
-                  <Box display="flex" alignItems="center">
-                    <TextField
-                      value={editMember}
-                      onChange={(e) => setEditMember(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      size="small" // 인풋 크기 조절
-                    />
-                    <IconButton
-                      color="inherit" // 기본 아이콘 색상
-                      size="small" // 아이콘 크기 조절
-                      style={{ marginLeft: "8px" }} // 인풋과 아이콘 사이 간격 조절
-                      onClick={() => {
-                        setEditMode(null); // 수정 모드 해제
-                        console.log("닫기 아이콘 클릭!"); // 로그 출력
-                      }}
-                    >
-                      <CloseIcon /> {/* 닫기 아이콘 */}
-                    </IconButton>
-                  </Box>
-                ) : (
-                  item.member || "사용자없음"
-                )}
-              </TableCell>
-              <TableCell align="center">
-                {editMode === item.no ? (
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleSave}
-                  >
-                    저장
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    onClick={() => handleEdit(item)}
-                  >
-                    수정
-                  </Button>
-                )}
-              </TableCell>
-              <TableCell align="center">
-                <Button
-                  disabled={item.member && item.member !== "사용자없음"}
-                  variant="outlined"
-                  color="secondary"
-                  onClick={() => deleteItem(item.no)}
+                {/* INDEX COLUMN */}
+                <td
+                  className={`px-6 py-5 bg-white first:rounded-l-2xl border-y border-l transition-all duration-300 ${
+                    isEditing
+                      ? "border-indigo-500 bg-indigo-50/30"
+                      : "border-slate-100 group-hover:border-slate-200 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.02)]"
+                  }`}
                 >
-                  삭제
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                  <div className="flex justify-center">
+                    <span
+                      className={`font-mono text-[11px] font-bold px-2 py-1 rounded-md transition-colors ${
+                        isEditing
+                          ? "bg-indigo-600 text-white"
+                          : "bg-slate-100 text-slate-400 group-hover:text-slate-600"
+                      }`}
+                    >
+                      {item.no.toString().padStart(3, "0")}
+                    </span>
+                  </div>
+                </td>
+
+                {/* LICENSE KEY COLUMN */}
+                <td
+                  className={`px-6 py-5 bg-white border-y transition-all duration-300 ${
+                    isEditing
+                      ? "border-indigo-500 bg-indigo-50/30"
+                      : "border-slate-100 group-hover:border-slate-200 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.02)]"
+                  }`}
+                >
+                  <div className="flex flex-col">
+                    <span
+                      className={`font-mono font-bold tracking-tight text-[17px] leading-none transition-all ${
+                        assigned && !isEditing
+                          ? "text-slate-300 line-through"
+                          : "text-slate-700"
+                      }`}
+                    >
+                      {item.key}
+                    </span>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span
+                        className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-tighter ${
+                          assigned
+                            ? "bg-slate-50 text-slate-300"
+                            : "bg-indigo-50 text-indigo-500"
+                        }`}
+                      >
+                        {item.version}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+
+                {/* ASSIGNEE COLUMN */}
+                <td
+                  className={`px-6 py-5 bg-white border-y transition-all duration-300 text-center ${
+                    isEditing
+                      ? "border-indigo-500 bg-indigo-50/30"
+                      : "border-slate-100 group-hover:border-slate-200 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.02)]"
+                  }`}
+                >
+                  {isEditing ? (
+                    <div className="relative inline-block scale-95 origin-center">
+                      <input
+                        type="text"
+                        value={editMember}
+                        onChange={(e) => setEditMember(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Assignee name"
+                        className="w-40 px-4 py-2 text-xs font-bold bg-white border-2 border-indigo-500 rounded-xl outline-none shadow-xl shadow-indigo-500/10 uppercase"
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <span
+                      className={`inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-bold tracking-wider transition-all border ${
+                        assigned
+                          ? "bg-slate-50 text-slate-400 border-slate-200"
+                          : "bg-emerald-50 text-emerald-600 border-emerald-100 ring-4 ring-emerald-500/5"
+                      }`}
+                    >
+                      <span
+                        className={`w-1 h-1 rounded-full mr-2 ${assigned ? "bg-slate-300" : "bg-emerald-500 animate-pulse"}`}
+                      ></span>
+                      {assigned ? item.member.toUpperCase() : "AVAILABLE ASSET"}
+                    </span>
+                  )}
+                </td>
+
+                {/* ACTIONS COLUMN */}
+                <td
+                  className={`px-6 py-5 bg-white last:rounded-r-2xl border-y border-r transition-all duration-300 text-right pr-8 ${
+                    isEditing
+                      ? "border-indigo-500 bg-indigo-50/30"
+                      : "border-slate-100 group-hover:border-slate-200 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.02)]"
+                  }`}
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={handleSave}
+                          className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md active:scale-90"
+                        >
+                          <CheckIcon sx={{ fontSize: 18 }} />
+                        </button>
+                        <button
+                          onClick={() => setEditMode(null)}
+                          className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-all"
+                        >
+                          <CloseIcon sx={{ fontSize: 18 }} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEdit(item)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                          title="Edit"
+                        >
+                          <EditRoundedIcon sx={{ fontSize: 20 }} />
+                        </button>
+                        <button
+                          disabled={assigned}
+                          onClick={() => deleteItem(item.no)}
+                          className={`p-2 rounded-lg transition-all ${
+                            assigned
+                              ? "text-slate-100 cursor-not-allowed opacity-30"
+                              : "text-slate-400 hover:text-red-500 hover:bg-red-50"
+                          }`}
+                          title="Delete"
+                        >
+                          <DeleteOutlineRoundedIcon sx={{ fontSize: 22 }} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {items.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-24 bg-slate-50/30 rounded-[2.5rem] border-2 border-dashed border-slate-100">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+            <CloseIcon className="text-slate-300" />
+          </div>
+          <p className="text-slate-400 text-sm font-semibold tracking-tight">
+            No assets found in the database.
+          </p>
+        </div>
+      )}
+    </div>
   );
 };
 
