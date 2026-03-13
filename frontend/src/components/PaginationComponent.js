@@ -4,12 +4,23 @@ import KeyboardDoubleArrowLeft from "@mui/icons-material/KeyboardDoubleArrowLeft
 import KeyboardArrowRight from "@mui/icons-material/KeyboardArrowRight";
 import KeyboardDoubleArrowRight from "@mui/icons-material/KeyboardDoubleArrowRight";
 
+// ─────────────────────────────────────────────
+// PaginationComponent
+//
+// 페이지 번호를 pagesToShow 단위로 그룹화해 표시.
+// 예) pagesToShow=5, currentPage=7 이면 6~10 그룹을 보여줌.
+//
+// 그룹 계산 로직:
+//   currentGroupFirstPage = floor((currentPage-1) / pagesToShow) * pagesToShow + 1
+//   예: currentPage=7, pagesToShow=5 → floor(6/5)*5+1 = 6
+// ─────────────────────────────────────────────
 const PaginationComponent = ({
   currentPage,
   totalPages,
   pagesToShow,
   onPageChange,
 }) => {
+  // 현재 페이지가 속한 그룹의 첫 번째 / 마지막 페이지 번호
   const currentGroupFirstPage =
     Math.floor((currentPage - 1) / pagesToShow) * pagesToShow + 1;
   const currentGroupLastPage = Math.min(
@@ -17,52 +28,42 @@ const PaginationComponent = ({
     totalPages,
   );
 
-  // 공통 버튼 스타일: 더 부드러운 라운딩과 정밀한 폰트 무게 적용
   const btnBase =
-    "group flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 font-bold text-[13px] outline-none select-none";
+    "group flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 font-semibold text-[13px] outline-none select-none";
 
-  // 액티브: 인디고 그라데이션과 강한 그림자로 강조
   const btnActive =
-    "bg-slate-900 text-white shadow-lg shadow-indigo-200 ring-4 ring-indigo-500/10 scale-105 z-10";
+    "bg-indigo-600 text-white shadow-sm";
 
-  // 인액티브: 미세한 보더와 투명도 조절
   const btnInactive =
-    "bg-white/50 text-slate-400 hover:bg-white hover:text-indigo-600 hover:shadow-sm hover:-translate-y-0.5 border border-transparent hover:border-slate-100";
+    "text-slate-500 hover:bg-slate-700 hover:text-slate-200";
 
-  // 비활성화: 시각적 노이즈를 줄이기 위해 더 연하게 처리
+  // pointer-events-none으로 클릭 이벤트 자체를 차단 (disabled 속성 대신)
   const btnDisabled =
     "opacity-20 cursor-not-allowed text-slate-300 pointer-events-none";
 
   return (
-    <div className="flex items-center justify-center py-6">
-      {/* 프리미엄 캡슐 컨테이너: 배경 흐림 효과와 얇은 보더 */}
-      <nav className="flex items-center gap-1.5 bg-slate-100/40 backdrop-blur-md p-1.5 rounded-[20px] border border-white shadow-sm">
-        {/* FIRST PAGE */}
+    <div className="flex items-center justify-center py-2">
+      <nav className="flex items-center gap-1 bg-slate-800 p-1.5 rounded-xl border border-slate-700 shadow-sm">
+        {/* 첫 페이지로 이동 */}
         <button
           disabled={currentPage === 1}
           onClick={() => onPageChange(1)}
           className={`${btnBase} ${currentPage === 1 ? btnDisabled : btnInactive}`}
         >
-          <KeyboardDoubleArrowLeft
-            className="group-hover:-translate-x-0.5 transition-transform"
-            sx={{ fontSize: "1.1rem" }}
-          />
+          <KeyboardDoubleArrowLeft sx={{ fontSize: "1rem" }} />
         </button>
 
-        {/* PREV PAGE */}
+        {/* 이전 페이지로 이동 */}
         <button
           disabled={currentPage === 1}
           onClick={() => onPageChange(currentPage - 1)}
           className={`${btnBase} ${currentPage === 1 ? btnDisabled : btnInactive}`}
         >
-          <KeyboardArrowLeft
-            className="group-hover:-translate-x-0.5 transition-transform"
-            sx={{ fontSize: "1.2rem" }}
-          />
+          <KeyboardArrowLeft sx={{ fontSize: "1.1rem" }} />
         </button>
 
-        {/* PAGE NUMBERS */}
-        <div className="flex items-center gap-1 mx-1.5">
+        {/* 현재 그룹의 페이지 번호 버튼들 */}
+        <div className="flex items-center gap-1 mx-1">
           {Array.from(
             { length: currentGroupLastPage - currentGroupFirstPage + 1 },
             (_, index) => {
@@ -72,47 +73,31 @@ const PaginationComponent = ({
                 <button
                   key={pageNum}
                   onClick={() => onPageChange(pageNum)}
-                  className={`${btnBase} ${isActive ? btnActive : btnInactive} relative overflow-hidden`}
+                  className={`${btnBase} ${isActive ? btnActive : btnInactive}`}
                 >
-                  <span className="relative z-10">{pageNum}</span>
-
-                  {/* 활성화 상태의 하단 인디케이터: 인디고 포인트 */}
-                  {isActive && (
-                    <span className="absolute bottom-1 w-1 h-1 bg-indigo-400 rounded-full animate-pulse"></span>
-                  )}
-
-                  {/* 호버 시 나타나는 배경 효과 (선택사항) */}
-                  {!isActive && (
-                    <div className="absolute inset-0 bg-indigo-50/50 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                  )}
+                  {pageNum}
                 </button>
               );
             },
           )}
         </div>
 
-        {/* NEXT PAGE */}
+        {/* 다음 페이지로 이동 */}
         <button
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(currentPage + 1)}
           className={`${btnBase} ${currentPage === totalPages ? btnDisabled : btnInactive}`}
         >
-          <KeyboardArrowRight
-            className="group-hover:translate-x-0.5 transition-transform"
-            sx={{ fontSize: "1.2rem" }}
-          />
+          <KeyboardArrowRight sx={{ fontSize: "1.1rem" }} />
         </button>
 
-        {/* LAST PAGE */}
+        {/* 마지막 페이지로 이동 */}
         <button
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(totalPages)}
           className={`${btnBase} ${currentPage === totalPages ? btnDisabled : btnInactive}`}
         >
-          <KeyboardDoubleArrowRight
-            className="group-hover:translate-x-0.5 transition-transform"
-            sx={{ fontSize: "1.1rem" }}
-          />
+          <KeyboardDoubleArrowRight sx={{ fontSize: "1rem" }} />
         </button>
       </nav>
     </div>

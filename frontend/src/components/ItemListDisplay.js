@@ -5,6 +5,7 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 
 const ItemListDisplay = ({ items, deleteItem, updateItem }) => {
+  // editMode: 현재 편집 중인 항목의 no (null이면 편집 모드 없음)
   const [editMode, setEditMode] = useState(null);
   const [editKey, setEditKey] = useState("");
   const [editMember, setEditMember] = useState("");
@@ -12,6 +13,7 @@ const ItemListDisplay = ({ items, deleteItem, updateItem }) => {
   const handleEdit = (item) => {
     setEditMode(item.no);
     setEditKey(item.key);
+    // member가 null/undefined인 경우 빈 문자열로 초기화
     setEditMember(item.member || "");
   };
 
@@ -25,55 +27,58 @@ const ItemListDisplay = ({ items, deleteItem, updateItem }) => {
     if (event.key === "Escape") setEditMode(null);
   };
 
+  // 사용자 배정 여부 판단
+  // null, '사용자없음', 빈 문자열 → 미사용(미배정) 상태
   const isAssigned = (member) =>
     member && member !== "사용자없음" && member !== "";
 
   return (
     <div className="w-full overflow-x-auto pb-4 scrollbar-hide">
-      <table className="w-full border-separate border-spacing-y-3">
+      <table className="w-full border-separate border-spacing-y-1.5">
         <thead>
-          <tr className="text-slate-400">
-            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.25em] text-center w-24">
-              Index
+          <tr className="bg-slate-800/40">
+            <th className="px-4 py-3 text-[10px] font-semibold tracking-widest uppercase text-slate-500 text-center w-20 first:rounded-l-lg">
+              번호
             </th>
-            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.25em] text-left">
-              License Identifier
+            <th className="px-4 py-3 text-[10px] font-semibold tracking-widest uppercase text-slate-500 text-left">
+              라이선스 키
             </th>
-            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.25em] text-center">
-              Status / Assignee
+            <th className="px-4 py-3 text-[10px] font-semibold tracking-widest uppercase text-slate-500 text-center">
+              사용자
             </th>
-            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.25em] text-right pr-10">
-              Management
+            <th className="px-4 py-3 text-[10px] font-semibold tracking-widest uppercase text-slate-500 text-right pr-8 last:rounded-r-lg">
+              관리
             </th>
           </tr>
         </thead>
 
-        <tbody className="before:leading-[0.1rem] before:block">
+        <tbody>
           {items.map((item) => {
             const assigned = isAssigned(item.member);
+            // isEditing: 현재 행이 편집 모드인지 여부
             const isEditing = editMode === item.no;
 
             return (
               <tr
                 key={item.no}
-                className={`group transition-all duration-300 ${
-                  isEditing ? "translate-x-1" : ""
+                className={`group transition-all duration-200 ${
+                  isEditing ? "translate-x-0.5" : ""
                 }`}
               >
-                {/* INDEX COLUMN */}
+                {/* 번호 셀: 편집 모드일 때 인디고 배경/테두리로 강조 */}
                 <td
-                  className={`px-6 py-5 bg-white first:rounded-l-2xl border-y border-l transition-all duration-300 ${
+                  className={`px-4 py-3.5 first:rounded-l-xl border-y border-l transition-all duration-200 ${
                     isEditing
-                      ? "border-indigo-500 bg-indigo-50/30"
-                      : "border-slate-100 group-hover:border-slate-200 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.02)]"
+                      ? "border-indigo-500/40 bg-indigo-900/20"
+                      : "bg-slate-800/60 border-slate-700/50 group-hover:border-slate-600/70 group-hover:bg-slate-800"
                   }`}
                 >
                   <div className="flex justify-center">
                     <span
-                      className={`font-mono text-[11px] font-bold px-2 py-1 rounded-md transition-colors ${
+                      className={`font-mono text-xs font-semibold px-2 py-1 rounded-md transition-colors ${
                         isEditing
                           ? "bg-indigo-600 text-white"
-                          : "bg-slate-100 text-slate-400 group-hover:text-slate-600"
+                          : "bg-slate-700 text-slate-500 group-hover:text-slate-300"
                       }`}
                     >
                       {item.no.toString().padStart(3, "0")}
@@ -81,30 +86,28 @@ const ItemListDisplay = ({ items, deleteItem, updateItem }) => {
                   </div>
                 </td>
 
-                {/* LICENSE KEY COLUMN */}
+                {/* 라이선스 키 셀: 배정된 키는 취소선 + 흐린 색으로 표시 */}
                 <td
-                  className={`px-6 py-5 bg-white border-y transition-all duration-300 ${
+                  className={`px-4 py-3.5 border-y transition-all duration-200 ${
                     isEditing
-                      ? "border-indigo-500 bg-indigo-50/30"
-                      : "border-slate-100 group-hover:border-slate-200 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.02)]"
+                      ? "border-indigo-500/40 bg-indigo-900/20"
+                      : "bg-slate-800/60 border-slate-700/50 group-hover:border-slate-600/70 group-hover:bg-slate-800"
                   }`}
                 >
                   <div className="flex flex-col">
                     <span
-                      className={`font-mono font-bold tracking-tight text-[17px] leading-none transition-all ${
+                      className={`font-mono font-semibold text-sm leading-none tracking-wide transition-all ${
                         assigned && !isEditing
-                          ? "text-slate-300 line-through"
-                          : "text-slate-700"
+                          ? "text-slate-600 line-through"
+                          : "text-slate-200"
                       }`}
                     >
                       {item.key}
                     </span>
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2 mt-1.5">
                       <span
-                        className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-tighter ${
-                          assigned
-                            ? "bg-slate-50 text-slate-300"
-                            : "bg-indigo-50 text-indigo-500"
+                        className={`text-[10px] font-medium tracking-wide ${
+                          assigned ? "text-slate-600" : "text-indigo-400"
                         }`}
                       >
                         {item.version}
@@ -113,48 +116,55 @@ const ItemListDisplay = ({ items, deleteItem, updateItem }) => {
                   </div>
                 </td>
 
-                {/* ASSIGNEE COLUMN */}
+                {/* 사용자 셀: 편집 모드 → 입력칸, 일반 모드 → 상태 배지 */}
                 <td
-                  className={`px-6 py-5 bg-white border-y transition-all duration-300 text-center ${
+                  className={`px-4 py-3.5 border-y transition-all duration-200 text-center ${
                     isEditing
-                      ? "border-indigo-500 bg-indigo-50/30"
-                      : "border-slate-100 group-hover:border-slate-200 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.02)]"
+                      ? "border-indigo-500/40 bg-indigo-900/20"
+                      : "bg-slate-800/60 border-slate-700/50 group-hover:border-slate-600/70 group-hover:bg-slate-800"
                   }`}
                 >
                   {isEditing ? (
-                    <div className="relative inline-block scale-95 origin-center">
+                    <div className="relative inline-block">
                       <input
                         type="text"
                         value={editMember}
                         onChange={(e) => setEditMember(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Assignee name"
-                        className="w-40 px-4 py-2 text-xs font-bold bg-white border-2 border-indigo-500 rounded-xl outline-none shadow-xl shadow-indigo-500/10 uppercase"
+                        placeholder="사용자명"
+                        className="w-36 px-3 py-1.5 text-xs font-medium bg-slate-700 text-slate-200 border-2 border-indigo-500 rounded-lg outline-none shadow-sm placeholder:text-slate-600"
                         autoFocus
                       />
                     </div>
                   ) : (
+                    // 미사용: 에메랄드(초록) 배지 + pulse 애니메이션
+                    // 사용 중: 회색 배지
                     <span
-                      className={`inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-bold tracking-wider transition-all border ${
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 ${
                         assigned
-                          ? "bg-slate-50 text-slate-400 border-slate-200"
-                          : "bg-emerald-50 text-emerald-600 border-emerald-100 ring-4 ring-emerald-500/5"
+                          ? "bg-slate-700/50 text-slate-500 border-slate-700"
+                          : "bg-emerald-900/20 text-emerald-400 border-emerald-800/50"
                       }`}
                     >
                       <span
-                        className={`w-1 h-1 rounded-full mr-2 ${assigned ? "bg-slate-300" : "bg-emerald-500 animate-pulse"}`}
+                        className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                          assigned ? "bg-slate-600" : "bg-emerald-500 animate-pulse"
+                        }`}
                       ></span>
-                      {assigned ? item.member.toUpperCase() : "AVAILABLE ASSET"}
+                      {assigned ? item.member : "미사용"}
                     </span>
                   )}
                 </td>
 
-                {/* ACTIONS COLUMN */}
+                {/* 관리 버튼 셀
+                    편집 모드: 저장(체크) / 취소(X)
+                    일반 모드: 수정(연필) / 삭제(휴지통)
+                    삭제 버튼은 배정된 키(사용 중)일 경우 비활성화 */}
                 <td
-                  className={`px-6 py-5 bg-white last:rounded-r-2xl border-y border-r transition-all duration-300 text-right pr-8 ${
+                  className={`px-4 py-3.5 last:rounded-r-xl border-y border-r transition-all duration-200 text-right pr-6 ${
                     isEditing
-                      ? "border-indigo-500 bg-indigo-50/30"
-                      : "border-slate-100 group-hover:border-slate-200 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.02)]"
+                      ? "border-indigo-500/40 bg-indigo-900/20"
+                      : "bg-slate-800/60 border-slate-700/50 group-hover:border-slate-600/70 group-hover:bg-slate-800"
                   }`}
                 >
                   <div className="flex items-center justify-end gap-1">
@@ -162,37 +172,37 @@ const ItemListDisplay = ({ items, deleteItem, updateItem }) => {
                       <>
                         <button
                           onClick={handleSave}
-                          className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md active:scale-90"
+                          className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all active:scale-90"
                         >
-                          <CheckIcon sx={{ fontSize: 18 }} />
+                          <CheckIcon sx={{ fontSize: 16 }} />
                         </button>
                         <button
                           onClick={() => setEditMode(null)}
-                          className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-all"
+                          className="p-1.5 text-slate-400 hover:bg-slate-700 rounded-lg transition-all"
                         >
-                          <CloseIcon sx={{ fontSize: 18 }} />
+                          <CloseIcon sx={{ fontSize: 16 }} />
                         </button>
                       </>
                     ) : (
                       <>
                         <button
                           onClick={() => handleEdit(item)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                          title="Edit"
+                          className="p-2 text-slate-600 hover:text-indigo-400 hover:bg-indigo-900/20 rounded-lg transition-all"
+                          title="수정"
                         >
-                          <EditRoundedIcon sx={{ fontSize: 20 }} />
+                          <EditRoundedIcon sx={{ fontSize: 16 }} />
                         </button>
                         <button
                           disabled={assigned}
                           onClick={() => deleteItem(item.no)}
                           className={`p-2 rounded-lg transition-all ${
                             assigned
-                              ? "text-slate-100 cursor-not-allowed opacity-30"
-                              : "text-slate-400 hover:text-red-500 hover:bg-red-50"
+                              ? "text-slate-700 cursor-not-allowed"
+                              : "text-slate-600 hover:text-red-400 hover:bg-red-900/20"
                           }`}
-                          title="Delete"
+                          title="삭제"
                         >
-                          <DeleteOutlineRoundedIcon sx={{ fontSize: 22 }} />
+                          <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
                         </button>
                       </>
                     )}
@@ -204,14 +214,14 @@ const ItemListDisplay = ({ items, deleteItem, updateItem }) => {
         </tbody>
       </table>
 
+      {/* 빈 상태 UI */}
       {items.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 bg-slate-50/30 rounded-[2.5rem] border-2 border-dashed border-slate-100">
-          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-            <CloseIcon className="text-slate-300" />
+        <div className="flex flex-col items-center justify-center py-20 rounded-xl border border-dashed border-slate-700/60 bg-gradient-to-b from-slate-800/20 to-transparent">
+          <div className="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
+            <span className="text-slate-600 text-lg font-mono font-bold select-none">—</span>
           </div>
-          <p className="text-slate-400 text-sm font-semibold tracking-tight">
-            No assets found in the database.
-          </p>
+          <p className="text-slate-400 text-sm font-medium">등록된 라이선스가 없습니다.</p>
+          <p className="text-slate-600 text-xs mt-1.5">위 폼에서 라이선스를 등록해주세요.</p>
         </div>
       )}
     </div>
