@@ -4,6 +4,13 @@ import KeyboardDoubleArrowLeft from "@mui/icons-material/KeyboardDoubleArrowLeft
 import KeyboardArrowRight from "@mui/icons-material/KeyboardArrowRight";
 import KeyboardDoubleArrowRight from "@mui/icons-material/KeyboardDoubleArrowRight";
 
+interface PaginationComponentProps {
+  currentPage: number;
+  totalPages: number;
+  pagesToShow: number;
+  onPageChange: (page: number) => void;
+}
+
 // ─────────────────────────────────────────────
 // PaginationComponent
 //
@@ -14,7 +21,7 @@ import KeyboardDoubleArrowRight from "@mui/icons-material/KeyboardDoubleArrowRig
 //   currentGroupFirstPage = floor((currentPage-1) / pagesToShow) * pagesToShow + 1
 //   예: currentPage=7, pagesToShow=5 → floor(6/5)*5+1 = 6
 // ─────────────────────────────────────────────
-const PaginationComponent = ({
+const PaginationComponent: React.FC<PaginationComponentProps> = ({
   currentPage,
   totalPages,
   pagesToShow,
@@ -32,22 +39,23 @@ const PaginationComponent = ({
     "group flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 font-semibold text-[13px] outline-none select-none";
 
   const btnActive =
-    "bg-indigo-600 text-white shadow-sm";
+    "bg-indigo-600 text-white shadow-sm dark:bg-gradient-to-r dark:from-indigo-500 dark:to-fuchsia-500 dark:shadow-indigo-500/30";
 
   const btnInactive =
-    "text-slate-500 hover:bg-slate-700 hover:text-slate-200";
+    "text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200";
 
   // pointer-events-none으로 클릭 이벤트 자체를 차단 (disabled 속성 대신)
   const btnDisabled =
-    "opacity-20 cursor-not-allowed text-slate-300 pointer-events-none";
+    "opacity-40 cursor-not-allowed text-slate-400 pointer-events-none dark:text-slate-700";
 
   return (
     <div className="flex items-center justify-center py-2">
-      <nav className="flex items-center gap-1 bg-slate-800 p-1.5 rounded-xl border border-slate-700 shadow-sm">
+      <nav aria-label="페이지네이션" className="flex flex-wrap items-center justify-center gap-1 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-sm dark:bg-white/5 dark:border-white/10 dark:shadow-none">
         {/* 첫 페이지로 이동 */}
         <button
           disabled={currentPage === 1}
           onClick={() => onPageChange(1)}
+          aria-label="첫 페이지로 이동"
           className={`${btnBase} ${currentPage === 1 ? btnDisabled : btnInactive}`}
         >
           <KeyboardDoubleArrowLeft sx={{ fontSize: "1rem" }} />
@@ -57,6 +65,7 @@ const PaginationComponent = ({
         <button
           disabled={currentPage === 1}
           onClick={() => onPageChange(currentPage - 1)}
+          aria-label="이전 페이지로 이동"
           className={`${btnBase} ${currentPage === 1 ? btnDisabled : btnInactive}`}
         >
           <KeyboardArrowLeft sx={{ fontSize: "1.1rem" }} />
@@ -73,6 +82,8 @@ const PaginationComponent = ({
                 <button
                   key={pageNum}
                   onClick={() => onPageChange(pageNum)}
+                  aria-label={`페이지 ${pageNum}`}
+                  aria-current={isActive ? "page" : undefined}
                   className={`${btnBase} ${isActive ? btnActive : btnInactive}`}
                 >
                   {pageNum}
@@ -86,6 +97,7 @@ const PaginationComponent = ({
         <button
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(currentPage + 1)}
+          aria-label="다음 페이지로 이동"
           className={`${btnBase} ${currentPage === totalPages ? btnDisabled : btnInactive}`}
         >
           <KeyboardArrowRight sx={{ fontSize: "1.1rem" }} />
@@ -95,6 +107,7 @@ const PaginationComponent = ({
         <button
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(totalPages)}
+          aria-label="마지막 페이지로 이동"
           className={`${btnBase} ${currentPage === totalPages ? btnDisabled : btnInactive}`}
         >
           <KeyboardDoubleArrowRight sx={{ fontSize: "1rem" }} />

@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 가로 스크롤은 필요하지만 스크롤바 자체는 시각적으로 숨기고 싶은 영역(탭 목록, 테이블 등)에 사용 */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

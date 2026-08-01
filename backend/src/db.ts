@@ -1,5 +1,6 @@
-// db.js
-const { Pool } = require("pg");
+// db.ts
+import "dotenv/config";
+import { Pool } from "pg";
 
 // ─────────────────────────────────────────────
 // PostgreSQL 연결 풀 설정.
@@ -7,11 +8,11 @@ const { Pool } = require("pg");
 // 기존 연결을 재사용해 성능을 높인다.
 // ─────────────────────────────────────────────
 const pool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "postgres",
-  password: "admin",
-  port: 5432,
+  user: process.env.DB_USER || "postgres",
+  host: process.env.DB_HOST || "localhost",
+  database: process.env.DB_NAME || "postgres",
+  password: process.env.DB_PASSWORD || "admin",
+  port: parseInt(process.env.DB_PORT || "5432", 10),
 });
 
 // ─────────────────────────────────────────────
@@ -47,4 +48,4 @@ const pool = new Pool({
   }
 })();
 
-module.exports = pool;
+export default pool;

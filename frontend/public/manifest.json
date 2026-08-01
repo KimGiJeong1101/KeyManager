@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "라이선스 관리",
+  "name": "라이선스 관리 시스템",
   "icons": [
     {
       "src": "favicon.ico",
