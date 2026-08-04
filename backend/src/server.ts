@@ -3,7 +3,8 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
 import { DatabaseError } from "pg";
-import pool from "./db";
+import pool, { initSchema } from "./db";
+import { CATEGORIES, VERSION_OPTIONS } from "./constants";
 import {
   ApiErrorBody,
   CategoryStatRow,
@@ -63,8 +64,11 @@ app.get(
     req: Request<{}, GetItemsResponseBody, {}, GetItemsQuery>,
     res: Response<GetItemsResponseBody | string>,
   ) => {
-    const page = parseInt(req.query.page || "", 10) || 1;
-    const limit = parseInt(req.query.limit || "", 10) || 10;
+    const page = Math.max(1, parseInt(req.query.page || "", 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.limit || "", 10) || 10),
+    );
     const offset = (page - 1) * limit;
 
     const { category, status, searchField, searchValue } = req.query;
@@ -89,7 +93,10 @@ app.get(
 
       // 3. 검색어 필터
       if (searchValue && searchValue.trim() !== "") {
-        const term = `%${searchValue}%`;
+        // ILIKE의 와일드카드 문자(%, _)와 이스케이프 문자(\) 자체를 사용자가
+        // 검색어에 입력했을 때 리터럴로 취급하도록 이스케이프한다.
+        const escaped = searchValue.replace(/[\\%_]/g, (match) => `\\${match}`);
+        const term = `%${escaped}%`;
         if (searchField === "key") {
           queryParams.push(term);
           baseQuery += ` AND key ILIKE $${queryParams.length}`;
@@ -203,11 +210,17 @@ app.post(
     if (!key || !category || !version) {
       return res.status(400).json({ error: "키, 카테고리, 버전은 필수 항목입니다." });
     }
+    if (!CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: "지원하지 않는 카테고리입니다." });
+    }
+    if (!VERSION_OPTIONS[category].includes(version)) {
+      return res.status(400).json({ error: "지원하지 않는 버전입니다." });
+    }
 
     try {
-      // 동일한 키가 이미 존재하는지 확인 (isdelete 관계없이 전체 검색)
+      // 동일한 키가 이미 존재하는지 확인 (삭제되지 않은 행만 대상 → 삭제된 키는 재등록 가능)
       const duplicateCheck = await pool.query(
-        "SELECT * FROM LICENSE_KEYS WHERE key = $1",
+        "SELECT * FROM LICENSE_KEYS WHERE key = $1 AND isdelete = 0",
         [key],
       );
       if (duplicateCheck.rows.length > 0) {
@@ -221,6 +234,10 @@ app.post(
 
       res.json(result.rows[0]);
     } catch (err) {
+      // 23505 = unique_violation (중복 체크 통과 후 동시 요청으로 키가 먼저 삽입된 경우)
+      if (err instanceof DatabaseError && err.code === "23505") {
+        return res.status(400).json({ error: "이미 등록된 라이선스 키입니다." });
+      }
       console.error("데이터 등록 오류:", err);
       res.status(500).send("Server Error");
     }
@@ -303,6 +320,25 @@ app.delete(
   },
 );
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+// 테이블/인덱스 생성이 끝난 뒤에 요청을 받기 시작해야, 완전히 새로운 DB에 처음
+// 배포할 때 "relation does not exist" 에러를 방지할 수 있다.
+let server: ReturnType<typeof app.listen>;
+
+initSchema().then(() => {
+  server = app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
 });
+
+function shutdown() {
+  if (!server) {
+    pool.end().finally(() => process.exit(0));
+    return;
+  }
+  server.close(() => {
+    pool.end().finally(() => process.exit(0));
+  });
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

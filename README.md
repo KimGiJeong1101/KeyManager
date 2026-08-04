@@ -37,7 +37,7 @@
 
 | 구분 | 기술 |
 |------|------|
-| Frontend | React 18, TypeScript, Tailwind CSS 3, MUI Icons, Axios |
+| Frontend | React 18, TypeScript, Tailwind CSS 3, Radix UI, lucide-react, Axios |
 | Backend | Node.js, Express 4, TypeScript |
 | Database | PostgreSQL |
 

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import ItemList from "./features/licenses/ItemList";
-import VpnKeyRoundedIcon from "@mui/icons-material/VpnKeyRounded";
-import DarkModeRoundedIcon from "@mui/icons-material/DarkModeRounded";
-import LightModeRoundedIcon from "@mui/icons-material/LightModeRounded";
+import { KeyRound, Moon, Sun } from "lucide-react";
+import { Toaster } from "./components/ui/sonner";
 import { checkHealth } from "./api/items";
 
 const THEME_KEY = "km-theme";
@@ -67,16 +66,14 @@ const App: React.FC = () => {
     CONNECTION_BADGE_MAP[String(isConnected) as "null" | "true" | "false"];
 
   return (
-    <div className="min-h-screen antialiased font-sans bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300">
+    <div className="min-h-screen antialiased font-sans bg-background text-foreground transition-colors duration-300">
       {/* 배경 글로우 (다크 모드 전용) */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden hidden dark:block">
-        <div className="absolute -top-32 -left-32 w-[32rem] h-[32rem] bg-indigo-600/20 rounded-full blur-[120px]" />
-        <div className="absolute top-1/3 -right-40 w-[28rem] h-[28rem] bg-fuchsia-600/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 left-1/4 w-[24rem] h-[24rem] bg-cyan-500/10 rounded-full blur-[120px]" />
+        <div className="absolute -top-32 -left-32 w-[32rem] h-[32rem] bg-blue-600/10 rounded-full blur-[140px]" />
       </div>
 
       {/* Top accent bar */}
-      <div className="h-[3px] bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-cyan-400 relative z-10" />
+      <div className="h-[3px] bg-blue-600 dark:bg-blue-500 relative z-10" />
 
       <main className="relative z-10 pt-8 sm:pt-12 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
@@ -108,29 +105,23 @@ const App: React.FC = () => {
                 onClick={toggleTheme}
                 aria-label={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
                 title={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
-                className="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-slate-200 shadow-sm text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all active:scale-90 dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:text-cyan-300 dark:hover:border-cyan-400/30 dark:backdrop-blur-xl"
+                className="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-slate-200 shadow-sm text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all active:scale-90 dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:text-cyan-300 dark:hover:border-cyan-400/30 dark:backdrop-blur-xl"
               >
-                {theme === "dark" ? (
-                  <LightModeRoundedIcon sx={{ fontSize: 18 }} />
-                ) : (
-                  <DarkModeRoundedIcon sx={{ fontSize: 18 }} />
-                )}
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
               </button>
             </div>
 
             {/* 타이틀 영역 */}
             <div className="flex items-center gap-4 sm:gap-5">
               {/* 아이콘 블록 */}
-              <div className="flex-shrink-0 p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 shadow-xl shadow-indigo-500/20 dark:shadow-indigo-500/40 dark:ring-1 dark:ring-white/10">
-                <VpnKeyRoundedIcon className="text-white" sx={{ fontSize: 32 }} />
+              <div className="flex-shrink-0 p-3 sm:p-4 rounded-2xl bg-blue-600 dark:bg-blue-500 shadow-md shadow-blue-500/20 dark:shadow-none dark:ring-1 dark:ring-white/10">
+                <KeyRound className="text-white" size={32} />
               </div>
 
               <div className="min-w-0">
                 <h1 className="text-2xl sm:text-3xl lg:text-[2.5rem] font-bold tracking-tight leading-none truncate">
                   <span className="text-slate-900 dark:text-slate-100">라이선스</span>{" "}
-                  <span className="bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:via-fuchsia-400 dark:to-cyan-300 bg-clip-text text-transparent">
-                    관리
-                  </span>
+                  <span className="text-blue-600 dark:text-blue-400">관리</span>
                 </h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                   소프트웨어 라이선스 키를 등록하고 사용자 배포 현황을 관리합니다.
@@ -158,6 +149,8 @@ const App: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      <Toaster theme={theme} />
     </div>
   );
 };

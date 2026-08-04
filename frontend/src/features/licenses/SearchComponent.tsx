@@ -1,7 +1,7 @@
 import React, { KeyboardEvent, useState } from "react";
-import SearchIcon from "@mui/icons-material/Search";
-import CloseIcon from "@mui/icons-material/Close";
-import Select from "../../components/ui/Select";
+import { Search, X } from "lucide-react";
+import { Button } from "../../components/ui/button";
+import SelectField from "../../components/ui/SelectField";
 import { SearchField } from "../../types/item";
 import { SelectOption } from "../../types/ui";
 
@@ -35,15 +35,15 @@ const SearchComponent: React.FC<SearchComponentProps> = ({ onSearch }) => {
 
   return (
     <div className="flex items-center w-full sm:max-w-lg transition-all duration-300">
-      <div className="flex w-full bg-slate-100 rounded-xl p-1 transition-all duration-300 border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 dark:bg-white/5 dark:border-white/10 dark:focus-within:ring-cyan-400/30 dark:focus-within:border-cyan-400/50">
+      <div className="flex w-full bg-slate-100 rounded-xl p-1 transition-all duration-300 border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-blue-500 dark:bg-white/5 dark:border-white/10 dark:focus-within:ring-cyan-400/30 dark:focus-within:border-cyan-400/50">
         {/* 필터 셀렉트 */}
-        <Select
+        <SelectField
           size="sm"
           value={filterOption}
           onChange={setFilterOption}
           options={FILTER_OPTIONS}
           aria-label="검색 필드 선택"
-          className="w-24 flex-shrink-0"
+          className="w-24 flex-shrink-0 border-none bg-transparent"
         />
 
         {/* 구분선 */}
@@ -51,7 +51,7 @@ const SearchComponent: React.FC<SearchComponentProps> = ({ onSearch }) => {
 
         {/* 검색 입력 */}
         <div className="flex-grow flex items-center px-1 min-w-0">
-          <SearchIcon className="text-slate-400 mr-2 flex-shrink-0 dark:text-slate-500" sx={{ fontSize: 16 }} />
+          <Search size={16} className="text-slate-400 mr-2 flex-shrink-0 dark:text-slate-500" />
           <input
             type="text"
             placeholder="키 / 사용자 검색"
@@ -68,19 +68,20 @@ const SearchComponent: React.FC<SearchComponentProps> = ({ onSearch }) => {
               className="flex-shrink-0 p-0.5 ml-1 text-slate-400 hover:text-slate-600 rounded transition-colors dark:text-slate-500 dark:hover:text-slate-300"
               title="검색 초기화"
             >
-              <CloseIcon sx={{ fontSize: 14 }} />
+              <X size={14} />
             </button>
           )}
         </div>
 
         {/* 검색 버튼 */}
-        <button
+        <Button
           onClick={handleSearch}
+          size="icon"
           aria-label="검색 실행"
-          className="flex items-center justify-center w-9 h-9 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all duration-200 active:scale-95 dark:bg-gradient-to-r dark:from-indigo-500 dark:to-fuchsia-500 dark:hover:from-indigo-400 dark:hover:to-fuchsia-400"
+          className="h-9 w-9 rounded-lg shadow-none active:scale-95"
         >
-          <SearchIcon sx={{ fontSize: 16 }} />
-        </button>
+          <Search size={16} />
+        </Button>
       </div>
     </div>
   );

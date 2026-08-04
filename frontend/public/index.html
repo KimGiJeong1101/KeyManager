@@ -25,6 +25,16 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>라이선스 관리 시스템</title>
+    <script>
+      // Radix 팝오버류(Select 등)는 위치 계산에 ResizeObserver를 쓰는데, 브라우저가 이 무해한
+      // 경고를 window error 이벤트로도 던져서 개발 모드 에러 오버레이가 뜬다. 실제 버그가 아니므로
+      // webpack-dev-server의 오버레이 클라이언트가 리스너를 붙이기 전인 이 시점에 먼저 걸러낸다.
+      window.addEventListener("error", function (event) {
+        if (event.message === "ResizeObserver loop completed with undelivered notifications.") {
+          event.stopImmediatePropagation();
+        }
+      });
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

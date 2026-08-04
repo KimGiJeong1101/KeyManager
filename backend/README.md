@@ -2,6 +2,9 @@
 
 라이선스 관리 시스템의 REST API 서버. Express + TypeScript로 작성되어 있고, PostgreSQL을 데이터 저장소로 사용한다.
 
+> **인증 없음(의도된 설계)**: 사내망에서만 쓰는 내부 관리 도구라 로그인/권한 체크가 없다.
+> 외부에 노출하는 배포 형태가 아니므로 누락이 아니라 의도적으로 생략한 것이다.
+
 ## 기술 스택
 
 - **Node.js + TypeScript** — 소스는 `src/`에 `.ts`로 작성하고, `tsc`로 `dist/`에 컴파일해서 실행한다.
@@ -14,9 +17,10 @@
 ```
 backend/
 ├── src/
-│   ├── server.ts   # Express 앱, 라우트 핸들러 전부 (health/items/category-stats/CRUD)
-│   ├── db.ts       # PostgreSQL 커넥션 풀 설정 + 테이블 자동 생성
-│   └── types.ts    # LicenseKeyRow, CategoryStatRow 등 요청/응답 타입
+│   ├── server.ts     # Express 앱, 라우트 핸들러 전부 (health/items/category-stats/CRUD)
+│   ├── db.ts         # PostgreSQL 커넥션 풀 설정 + 테이블/인덱스 자동 생성(initSchema)
+│   ├── constants.ts  # category/version 화이트리스트 (프론트 옵션과 동일하게 유지)
+│   └── types.ts      # LicenseKeyRow, CategoryStatRow 등 요청/응답 타입
 ├── dist/           # tsc 빌드 산출물 (git 추적 안 함, npm run build로 생성)
 ├── tsconfig.json
 └── package.json
@@ -50,9 +54,12 @@ DB_PORT=5432
 PORT=5000
 ```
 
-`.env` 파일이 없으면 `src/db.ts`에 정의된 기본값(user: postgres, password: admin 등)이 사용된다.
+`DB_USER`/`DB_HOST`/`DB_NAME`/`DB_PORT`는 값이 없으면 `src/db.ts`의 기본값(각각 `postgres`/`localhost`/`postgres`/`5432`)이 쓰인다.
+단, `DB_PASSWORD`는 약한 기본값으로 조용히 폴백하지 않고 **값이 없으면 서버가 즉시 에러를 던지며 기동을 거부**한다.
 
-테이블은 서버 최초 실행 시 자동으로 생성된다 (별도 SQL 실행 불필요).
+테이블과 인덱스는 서버 최초 실행 시 `initSchema()`가 자동으로 생성한다 (별도 SQL 실행 불필요).
+`server.ts`는 `app.listen()` 전에 이 초기화를 `await`하므로, 완전히 새로운 DB에 처음 배포해도
+테이블이 준비되기 전에 요청을 받는 경쟁 상태가 발생하지 않는다.
 
 ### 2. 설치 및 실행
 
@@ -74,13 +81,19 @@ npm start       # node dist/server.js
 ```sql
 CREATE TABLE LICENSE_KEYS (
   no           SERIAL PRIMARY KEY,
-  key          VARCHAR(100) NOT NULL UNIQUE, -- 라이선스 키 (XXXXX-XXXXX-... 형식)
+  key          VARCHAR(100) NOT NULL,       -- 라이선스 키 (XXXXX-XXXXX-... 형식)
   member       VARCHAR(100) DEFAULT '사용자없음', -- 배정된 사용자명
   isdelete     INT DEFAULT 0,               -- 소프트 삭제 플래그 (0: 정상, 1: 삭제)
-  CATEGORY     VARCHAR(50),                 -- Windows / MS_Office / Hancom
-  VERSION      VARCHAR(50),                 -- 세부 버전명
+  CATEGORY     VARCHAR(50),                 -- Windows / MS_Office / Hancom (constants.ts 화이트리스트로 검증)
+  VERSION      VARCHAR(50),                 -- 세부 버전명 (constants.ts 화이트리스트로 검증)
   search_vector tsvector                    -- 향후 전문 검색 확장용 (현재 미사용)
 );
+
+-- 컬럼 레벨 UNIQUE 대신, 삭제되지 않은 행(isdelete = 0) 사이에서만 key 유일성을 강제한다.
+-- → 소프트 삭제된 키는 별도 조치 없이 같은 값으로 재등록할 수 있다.
+CREATE UNIQUE INDEX license_keys_key_active_uidx
+ON LICENSE_KEYS (key)
+WHERE isdelete = 0;
 ```
 
 ### 사용자 배정 상태 기준
@@ -138,12 +151,15 @@ Response 200:
 ---
 
 ### `POST /items`
-새 라이선스 키 등록. 중복 키 입력 시 400 에러 반환.
+새 라이선스 키 등록. `category`/`version`은 `src/constants.ts`의 화이트리스트에 있는 값만 허용하며,
+중복 키(삭제되지 않은 행 기준) 입력 시 400 에러를 반환한다.
 
 ```json
 Request Body: { "key": "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX", "category": "Windows", "version": "Windows 11 Pro" }
 Response 200: { 등록된 행 }
 Response 400: { "error": "이미 등록된 라이선스 키입니다." }
+Response 400: { "error": "지원하지 않는 카테고리입니다." }
+Response 400: { "error": "지원하지 않는 버전입니다." }
 ```
 
 ---
@@ -181,6 +197,15 @@ const idx = queryParams.length;  // 한 번만 push하고 인덱스 재사용
 baseQuery += ` AND (key ILIKE $${idx} OR member ILIKE $${idx})`;
 ```
 
+검색어에 포함된 `%`, `_`, `\`는 ILIKE의 와일드카드/이스케이프 문자로 해석되므로,
+쿼리에 넣기 전에 `\`로 이스케이프해 사용자가 입력한 문자 그대로 리터럴 매칭되도록 한다.
+
+### DB 커넥션 안정성 (`src/db.ts`)
+
+`pg.Pool`은 `EventEmitter`라서 유휴 커넥션에서 에러(DB 재시작, 네트워크 끊김 등)가 나면
+`'error'` 이벤트를 emit한다. 리스너가 없으면 Node가 이를 unhandled exception으로 처리해
+서버 프로세스 전체가 죽으므로, `pool.on("error", ...)`로 로그만 남기고 서버는 계속 동작하도록 한다.
+
 ### 소프트 삭제 (Soft Delete)
 
 `DELETE` 요청은 실제로 행을 삭제하지 않고 `isdelete = 1`로만 표시한다.
@@ -205,8 +230,9 @@ baseQuery += ` AND (key ILIKE $${idx} OR member ILIKE $${idx})`;
 
 ### 중복 키 등록 오류
 
-동일한 키는 `isdelete` 값에 관계없이 중복으로 판단한다 (소프트 삭제된 키 포함).
-삭제된 키를 재사용하려면 DB에서 해당 행의 `isdelete`를 `0`으로 직접 수정해야 한다.
+중복 판정은 삭제되지 않은 행(`isdelete = 0`)만 대상으로 한다 (partial unique index 기준).
+즉 **소프트 삭제된 키는 별도 조치 없이 동일한 값으로 다시 등록할 수 있으며**, 이미 등록되어
+있고 삭제되지 않은 키와 같은 값을 입력할 때만 400 에러가 발생한다.
 
 ### `npm install` 시 ERESOLVE 에러가 날 때
 

@@ -1,8 +1,6 @@
 import React from "react";
-import KeyboardArrowLeft from "@mui/icons-material/KeyboardArrowLeft";
-import KeyboardDoubleArrowLeft from "@mui/icons-material/KeyboardDoubleArrowLeft";
-import KeyboardArrowRight from "@mui/icons-material/KeyboardArrowRight";
-import KeyboardDoubleArrowRight from "@mui/icons-material/KeyboardDoubleArrowRight";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { cn } from "../../lib/utils";
 
 interface PaginationComponentProps {
   currentPage: number;
@@ -39,7 +37,7 @@ const PaginationComponent: React.FC<PaginationComponentProps> = ({
     "group flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-200 font-semibold text-[13px] outline-none select-none";
 
   const btnActive =
-    "bg-indigo-600 text-white shadow-sm dark:bg-gradient-to-r dark:from-indigo-500 dark:to-fuchsia-500 dark:shadow-indigo-500/30";
+    "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:shadow-none";
 
   const btnInactive =
     "text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200";
@@ -56,9 +54,9 @@ const PaginationComponent: React.FC<PaginationComponentProps> = ({
           disabled={currentPage === 1}
           onClick={() => onPageChange(1)}
           aria-label="첫 페이지로 이동"
-          className={`${btnBase} ${currentPage === 1 ? btnDisabled : btnInactive}`}
+          className={cn(btnBase, currentPage === 1 ? btnDisabled : btnInactive)}
         >
-          <KeyboardDoubleArrowLeft sx={{ fontSize: "1rem" }} />
+          <ChevronsLeft size={16} />
         </button>
 
         {/* 이전 페이지로 이동 */}
@@ -66,9 +64,9 @@ const PaginationComponent: React.FC<PaginationComponentProps> = ({
           disabled={currentPage === 1}
           onClick={() => onPageChange(currentPage - 1)}
           aria-label="이전 페이지로 이동"
-          className={`${btnBase} ${currentPage === 1 ? btnDisabled : btnInactive}`}
+          className={cn(btnBase, currentPage === 1 ? btnDisabled : btnInactive)}
         >
-          <KeyboardArrowLeft sx={{ fontSize: "1.1rem" }} />
+          <ChevronLeft size={18} />
         </button>
 
         {/* 현재 그룹의 페이지 번호 버튼들 */}
@@ -84,7 +82,7 @@ const PaginationComponent: React.FC<PaginationComponentProps> = ({
                   onClick={() => onPageChange(pageNum)}
                   aria-label={`페이지 ${pageNum}`}
                   aria-current={isActive ? "page" : undefined}
-                  className={`${btnBase} ${isActive ? btnActive : btnInactive}`}
+                  className={cn(btnBase, isActive ? btnActive : btnInactive)}
                 >
                   {pageNum}
                 </button>
@@ -98,9 +96,9 @@ const PaginationComponent: React.FC<PaginationComponentProps> = ({
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(currentPage + 1)}
           aria-label="다음 페이지로 이동"
-          className={`${btnBase} ${currentPage === totalPages ? btnDisabled : btnInactive}`}
+          className={cn(btnBase, currentPage === totalPages ? btnDisabled : btnInactive)}
         >
-          <KeyboardArrowRight sx={{ fontSize: "1.1rem" }} />
+          <ChevronRight size={18} />
         </button>
 
         {/* 마지막 페이지로 이동 */}
@@ -108,9 +106,9 @@ const PaginationComponent: React.FC<PaginationComponentProps> = ({
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(totalPages)}
           aria-label="마지막 페이지로 이동"
-          className={`${btnBase} ${currentPage === totalPages ? btnDisabled : btnInactive}`}
+          className={cn(btnBase, currentPage === totalPages ? btnDisabled : btnInactive)}
         >
-          <KeyboardDoubleArrowRight sx={{ fontSize: "1rem" }} />
+          <ChevronsRight size={16} />
         </button>
       </nav>
     </div>

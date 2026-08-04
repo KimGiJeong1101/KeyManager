@@ -11,14 +11,9 @@ import PaginationComponent from "../../components/ui/PaginationComponent";
 import SearchComponent from "./SearchComponent";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import RegisterModal from "./RegisterModal";
-import { useToast, ToastContainer } from "../../components/ui/Toast";
-import VpnKeyRoundedIcon from "@mui/icons-material/VpnKeyRounded";
-import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
-import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
-import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
-import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import EditRoundedIcon from "@mui/icons-material/EditRounded";
-import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import { Button } from "../../components/ui/button";
+import { toast } from "sonner";
+import { KeyRound, User, Unlock, ChevronDown, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   createItem,
   deleteItemRequest,
@@ -31,9 +26,9 @@ import { Category, CategoryStat, Item, SearchField, StatusFilter } from "../../t
 
 // 토스트 액션별 아이콘 (성공/중립 토스트에서 등록·수정·삭제를 구분해서 보여주기 위함)
 const TOAST_ICON: Record<string, ReactNode> = {
-  add: <AddRoundedIcon sx={{ fontSize: 18 }} className="text-emerald-500" />,
-  edit: <EditRoundedIcon sx={{ fontSize: 18 }} className="text-emerald-500" />,
-  delete: <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} className="text-slate-400" />,
+  add: <Plus size={18} className="text-emerald-500" />,
+  edit: <Pencil size={18} className="text-emerald-500" />,
+  delete: <Trash2 size={18} className="text-slate-400" />,
 };
 
 // ─────────────────────────────────────────────
@@ -158,9 +153,12 @@ const ItemList: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   // isRegisterOpen: 라이선스 등록 모달 표시 여부
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  // isSubmitting/isDeleting: 요청이 진행 중일 때 버튼을 비활성화해 중복 클릭으로
+  // 같은 요청이 두 번 나가는 것을 막는다.
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   // searchResetKey: 값이 바뀌면 SearchComponent가 리마운트되어 내부 검색어 입력이 초기화된다
   const [searchResetKey, setSearchResetKey] = useState(0);
-  const { toasts, showToast, dismissToast } = useToast();
   // expandedStat: 탭/클릭으로 펼친 통계 카드의 label (터치 기기는 hover가 없어 클릭 토글 필요)
   const [expandedStat, setExpandedStat] = useState<string | null>(null);
 
@@ -182,7 +180,7 @@ const ItemList: React.FC = () => {
       setCategoryStats(stats);
     } catch (error) {
       console.error("통계 로딩 실패:", error);
-      showToast("error", "통계를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+      toast.error("통계를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
     }
   };
 
@@ -201,7 +199,7 @@ const ItemList: React.FC = () => {
       setTotalItems(response.total);
     } catch (error) {
       console.error("Error fetching items:", error);
-      showToast("error", "목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+      toast.error("목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       setIsLoading(false);
     }
@@ -245,9 +243,12 @@ const ItemList: React.FC = () => {
 
   const addItems = async () => {
     if (!isKeyComplete || !category || !version) {
-      showToast("error", "카테고리, 버전 및 25자리 키를 모두 확인해주세요.");
+      toast.error("카테고리, 버전 및 25자리 키를 모두 확인해주세요.");
       return;
     }
+    // 이미 요청이 진행 중이면 버튼 연타/Enter 반복으로 같은 등록이 두 번 나가지 않도록 막는다.
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await createItem({
         // 5개 칸을 하이픈으로 연결해 "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" 형식으로 전송
@@ -261,9 +262,11 @@ const ItemList: React.FC = () => {
       setIsRegisterOpen(false);
       fetchItems(currentPage);
       fetchCategoryStats();
-      showToast("success", "새로운 라이선스가 등록되었습니다.", TOAST_ICON.add);
+      toast.success("새로운 라이선스가 등록되었습니다.", { icon: TOAST_ICON.add });
     } catch (error) {
-      showToast("error", getErrorMessage(error, "등록 프로세스 중 오류가 발생했습니다."));
+      toast.error(getErrorMessage(error, "등록 프로세스 중 오류가 발생했습니다."));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -273,16 +276,20 @@ const ItemList: React.FC = () => {
   };
 
   const confirmDelete = async () => {
+    if (isDeleting) return;
     const no = deleteTarget;
-    setDeleteTarget(null);
     if (no === null) return;
+    setIsDeleting(true);
     try {
       await deleteItemRequest(no);
+      setDeleteTarget(null);
       fetchItems(currentPage);
       fetchCategoryStats();
-      showToast("neutral", "라이선스가 삭제되었습니다.", TOAST_ICON.delete);
+      toast("라이선스가 삭제되었습니다.", { icon: TOAST_ICON.delete });
     } catch (error) {
-      showToast("error", getErrorMessage(error, "삭제 중 오류가 발생했습니다."));
+      toast.error(getErrorMessage(error, "삭제 중 오류가 발생했습니다."));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -293,10 +300,10 @@ const ItemList: React.FC = () => {
       await updateItemRequest(no, { key, member });
       fetchItems(currentPage);
       fetchCategoryStats();
-      showToast("success", "라이선스 정보가 수정되었습니다.", TOAST_ICON.edit);
+      toast.success("라이선스 정보가 수정되었습니다.", { icon: TOAST_ICON.edit });
       return true;
     } catch (error) {
-      showToast("error", getErrorMessage(error, "수정 중 오류가 발생했습니다."));
+      toast.error(getErrorMessage(error, "수정 중 오류가 발생했습니다."));
       return false;
     }
   };
@@ -361,7 +368,7 @@ const ItemList: React.FC = () => {
         topBorder: "border-t-slate-400 dark:border-t-slate-600",
         hoverBg: "hover:bg-slate-50 dark:hover:bg-white/[0.03]",
         iconBg: "bg-slate-100 dark:bg-white/10",
-        icon: <VpnKeyRoundedIcon sx={{ fontSize: 15 }} className="text-slate-500 dark:text-slate-300" />,
+        icon: <KeyRound size={15} className="text-slate-500 dark:text-slate-300" />,
         showBar: false,
       },
       {
@@ -372,7 +379,7 @@ const ItemList: React.FC = () => {
         topBorder: "border-t-emerald-500 dark:border-t-emerald-400",
         hoverBg: "hover:bg-emerald-50 dark:hover:bg-emerald-500/[0.06]",
         iconBg: "bg-emerald-100 dark:bg-emerald-400/10",
-        icon: <PersonRoundedIcon sx={{ fontSize: 15 }} className="text-emerald-600 dark:text-emerald-400" />,
+        icon: <User size={15} className="text-emerald-600 dark:text-emerald-400" />,
         barColor: "bg-emerald-500 dark:bg-emerald-400",
         showBar: true,
       },
@@ -380,12 +387,12 @@ const ItemList: React.FC = () => {
         label: "미사용 (가용)",
         mainCount: totalStats.available,
         detailKey: "available",
-        color: "text-indigo-600 dark:text-cyan-400",
-        topBorder: "border-t-indigo-500 dark:border-t-cyan-400",
-        hoverBg: "hover:bg-indigo-50 dark:hover:bg-cyan-400/[0.06]",
-        iconBg: "bg-indigo-100 dark:bg-cyan-400/10",
-        icon: <LockOpenRoundedIcon sx={{ fontSize: 15 }} className="text-indigo-600 dark:text-cyan-400" />,
-        barColor: "bg-indigo-500 dark:bg-cyan-400",
+        color: "text-blue-600 dark:text-cyan-400",
+        topBorder: "border-t-blue-500 dark:border-t-cyan-400",
+        hoverBg: "hover:bg-blue-50 dark:hover:bg-cyan-400/[0.06]",
+        iconBg: "bg-blue-100 dark:bg-cyan-400/10",
+        icon: <Unlock size={15} className="text-blue-600 dark:text-cyan-400" />,
+        barColor: "bg-blue-500 dark:bg-cyan-400",
         showBar: true,
       },
     ],
@@ -394,12 +401,12 @@ const ItemList: React.FC = () => {
 
   return (
     <div className="bg-white dark:bg-transparent rounded-2xl overflow-hidden">
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <ConfirmDialog
         open={deleteTarget !== null}
         title="라이선스 삭제"
         message="이 자산을 삭제하시겠습니까? 삭제된 항목은 목록에서 즉시 사라집니다."
         confirmLabel="삭제"
+        isConfirming={isDeleting}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
@@ -410,6 +417,7 @@ const ItemList: React.FC = () => {
         keys={keys}
         versionOptions={VERSION_OPTIONS}
         isKeyComplete={isKeyComplete}
+        isSubmitting={isSubmitting}
         onCategoryChange={handleCategorySelect}
         onVersionChange={setVersion}
         onKeyChange={handleChange}
@@ -433,7 +441,7 @@ const ItemList: React.FC = () => {
             }
             aria-expanded={isExpanded}
             aria-label={`${stat.label} 카테고리별 상세 보기`}
-            className={`group relative overflow-hidden transition-all duration-300 border-t-2 w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-inset ${stat.topBorder} ${stat.hoverBg}`}
+            className={`group relative overflow-hidden transition-all duration-300 border-t-2 w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-inset ${stat.topBorder} ${stat.hoverBg}`}
           >
             {/* 기본 뷰: 아이콘 + 레이블 + 숫자 + 프로그레스 바 */}
             <div
@@ -481,7 +489,7 @@ const ItemList: React.FC = () => {
                 isExpanded ? "opacity-0" : ""
               }`}
             >
-              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 16 }} />
+              <ChevronDown size={16} />
             </span>
 
             {/* 호버/탭 뷰: 카테고리별 세부 수치 (아래에서 슬라이드 업) */}
@@ -526,7 +534,7 @@ const ItemList: React.FC = () => {
                 onClick={() => handleCategoryChange(tab)}
                 className={`px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap ${
                   selectedCategory === (CATEGORY_MAP[tab] || tab)
-                    ? "text-indigo-600 bg-indigo-50 dark:text-cyan-300 dark:bg-cyan-400/10"
+                    ? "text-blue-600 bg-blue-50 dark:text-cyan-300 dark:bg-cyan-400/10"
                     : "text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-white/5"
                 }`}
               >
@@ -544,7 +552,7 @@ const ItemList: React.FC = () => {
                   onClick={() => handleStatusChange(label)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-200 whitespace-nowrap ${
                     statusFilter === (STATUS_MAP[label] || "all")
-                      ? "bg-indigo-600 text-white shadow-sm dark:bg-gradient-to-r dark:from-indigo-500 dark:to-fuchsia-500 dark:shadow-indigo-500/30"
+                      ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:shadow-none"
                       : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-white/10"
                   }`}
                 >
@@ -559,13 +567,10 @@ const ItemList: React.FC = () => {
             </div>
 
             {/* 등록 버튼: 클릭 시 등록 모달을 연다 */}
-            <button
-              onClick={() => setIsRegisterOpen(true)}
-              className="flex items-center justify-center gap-1.5 px-4 h-9 text-sm font-semibold rounded-lg whitespace-nowrap transition-all bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-700 hover:to-violet-700 active:scale-95 shadow-md shadow-indigo-200 dark:from-indigo-500 dark:to-fuchsia-500 dark:hover:from-indigo-400 dark:hover:to-fuchsia-400 dark:shadow-indigo-500/30"
-            >
-              <AddRoundedIcon sx={{ fontSize: 18 }} />
+            <Button onClick={() => setIsRegisterOpen(true)} className="whitespace-nowrap">
+              <Plus size={18} />
               새 라이선스
-            </button>
+            </Button>
           </div>
         </div>
       </div>
