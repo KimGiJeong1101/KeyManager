@@ -3,6 +3,7 @@ import { apiClient } from "./client";
 import {
   ApiErrorResponse,
   CategoryStat,
+  CategoryVersions,
   CreateItemPayload,
   Item,
   ItemsQueryParams,
@@ -14,6 +15,13 @@ export const checkHealth = (): Promise<unknown> => apiClient.get("/health");
 
 export const getCategoryStats = async (): Promise<CategoryStat[]> => {
   const response = await apiClient.get<CategoryStat[]>("/items/category-stats");
+  return response.data;
+};
+
+// 등록 폼의 category → version 화이트리스트. 백엔드 constants.ts를 그대로 반환받아
+// 프론트가 별도로 하드코딩하지 않도록 한다.
+export const getCategories = async (): Promise<CategoryVersions> => {
+  const response = await apiClient.get<CategoryVersions>("/categories");
   return response.data;
 };
 

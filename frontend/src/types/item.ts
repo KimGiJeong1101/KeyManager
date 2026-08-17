@@ -26,6 +26,10 @@ export interface CategoryStat {
   available: number;
 }
 
+// GET /categories 응답. category → 등록 가능한 version 목록.
+// 백엔드 constants.ts를 단일 소스로 두기 위해 프론트에서 별도로 하드코딩하지 않는다.
+export type CategoryVersions = Record<string, string[]>;
+
 export interface ItemsQueryParams {
   page: number;
   limit: number;

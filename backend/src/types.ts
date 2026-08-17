@@ -22,6 +22,10 @@ export interface CategoryStatRow {
   available: number;
 }
 
+// GET /categories 응답. constants.ts의 category → version 화이트리스트를 그대로 반환해
+// 프론트가 별도로 하드코딩하지 않고 백엔드를 단일 소스로 쓰게 한다.
+export type CategoryVersionsResponse = Record<string, string[]>;
+
 export interface ApiErrorBody {
   error: string;
 }

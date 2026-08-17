@@ -91,7 +91,11 @@ export async function initSchema(): Promise<void> {
 
     console.log("LICENSE_KEYS 테이블 확인 및 최신화 완료");
   } catch (error) {
+    // 에러를 삼키고 넘어가면 서버가 "정상 기동"한 것처럼 보이지만 이후 모든 쿼리가
+    // "relation does not exist" 등으로 조용히 실패한다. 호출자(server.ts)가 기동을
+    // 중단할 수 있도록 다시 던진다.
     console.error("테이블 생성 중 오류가 발생했습니다:", error);
+    throw error;
   }
 }
 

@@ -5,9 +5,11 @@ import bodyParser from "body-parser";
 import { DatabaseError } from "pg";
 import pool, { initSchema } from "./db";
 import { CATEGORIES, VERSION_OPTIONS } from "./constants";
+import { buildItemsFilter, parsePagination } from "./query-builder";
 import {
   ApiErrorBody,
   CategoryStatRow,
+  CategoryVersionsResponse,
   CreateItemBody,
   FullLicenseKeyRow,
   GetItemsQuery,
@@ -37,6 +39,19 @@ app.get("/health", async (_req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
+// GET /categories
+// 등록 폼에서 쓰는 category → version 화이트리스트.
+// constants.ts를 프론트와 공유하는 단일 소스로 쓰기 위해 그대로 반환한다.
+// (프론트에서 같은 목록을 하드코딩해두면 한쪽만 수정될 때 값이 어긋날 수 있다.)
+// ─────────────────────────────────────────────
+app.get(
+  "/categories",
+  (_req: Request, res: Response<CategoryVersionsResponse>) => {
+    res.json(VERSION_OPTIONS);
+  },
+);
+
+// ─────────────────────────────────────────────
 // GET /items
 // 라이선스 목록 조회 (페이지네이션 + 카테고리 필터 + 검색)
 //
@@ -64,53 +79,16 @@ app.get(
     req: Request<{}, GetItemsResponseBody, {}, GetItemsQuery>,
     res: Response<GetItemsResponseBody | string>,
   ) => {
-    const page = Math.max(1, parseInt(req.query.page || "", 10) || 1);
-    const limit = Math.min(
-      100,
-      Math.max(1, parseInt(req.query.limit || "", 10) || 10),
-    );
-    const offset = (page - 1) * limit;
-
+    const { limit, offset } = parsePagination(req.query.page, req.query.limit);
     const { category, status, searchField, searchValue } = req.query;
 
     try {
-      let baseQuery = "FROM LICENSE_KEYS WHERE isdelete = 0";
-      const queryParams: string[] = [];
-
-      // 1. 카테고리 필터
-      if (category && category !== "allassets") {
-        queryParams.push(category);
-        baseQuery += ` AND category = $${queryParams.length}`;
-      }
-
-      // 2. 사용 상태 필터
-      // 미사용 기준: member가 NULL / '사용자없음' / '' 중 하나 (category-stats와 동일한 기준)
-      if (status === "assigned") {
-        baseQuery += ` AND (member IS NOT NULL AND member <> '사용자없음' AND member <> '')`;
-      } else if (status === "unassigned") {
-        baseQuery += ` AND (member IS NULL OR member = '사용자없음' OR member = '')`;
-      }
-
-      // 3. 검색어 필터
-      if (searchValue && searchValue.trim() !== "") {
-        // ILIKE의 와일드카드 문자(%, _)와 이스케이프 문자(\) 자체를 사용자가
-        // 검색어에 입력했을 때 리터럴로 취급하도록 이스케이프한다.
-        const escaped = searchValue.replace(/[\\%_]/g, (match) => `\\${match}`);
-        const term = `%${escaped}%`;
-        if (searchField === "key") {
-          queryParams.push(term);
-          baseQuery += ` AND key ILIKE $${queryParams.length}`;
-        } else if (searchField === "member") {
-          queryParams.push(term);
-          baseQuery += ` AND member ILIKE $${queryParams.length}`;
-        } else {
-          // ALL 검색: key와 member 둘 다 같은 파라미터($idx)로 OR 검색
-          // → 파라미터를 한 번만 push하고 인덱스를 재사용
-          queryParams.push(term);
-          const idx = queryParams.length;
-          baseQuery += ` AND (key ILIKE $${idx} OR member ILIKE $${idx})`;
-        }
-      }
+      const { baseQuery, queryParams } = buildItemsFilter({
+        category,
+        status,
+        searchField,
+        searchValue,
+      });
 
       // [Step A] 전체 개수 조회 (페이지네이션 계산용)
       const totalResult = await pool.query(
@@ -206,8 +184,10 @@ app.post(
     res: Response<FullLicenseKeyRow | ApiErrorBody | string>,
   ) => {
     const { key, category, version } = req.body;
+    // PUT /items/:no과 동일하게 공백만 입력된 키를 걸러낸다 (예: "   ").
+    const trimmedKey = key?.trim();
 
-    if (!key || !category || !version) {
+    if (!trimmedKey || !category || !version) {
       return res.status(400).json({ error: "키, 카테고리, 버전은 필수 항목입니다." });
     }
     if (!CATEGORIES.includes(category)) {
@@ -221,7 +201,7 @@ app.post(
       // 동일한 키가 이미 존재하는지 확인 (삭제되지 않은 행만 대상 → 삭제된 키는 재등록 가능)
       const duplicateCheck = await pool.query(
         "SELECT * FROM LICENSE_KEYS WHERE key = $1 AND isdelete = 0",
-        [key],
+        [trimmedKey],
       );
       if (duplicateCheck.rows.length > 0) {
         return res.status(400).json({ error: "이미 등록된 라이선스 키입니다." });
@@ -229,7 +209,7 @@ app.post(
 
       const result = await pool.query(
         "INSERT INTO LICENSE_KEYS (key, CATEGORY, VERSION) VALUES ($1, $2, $3) RETURNING *",
-        [key, category, version],
+        [trimmedKey, category, version],
       );
 
       res.json(result.rows[0]);
@@ -257,18 +237,19 @@ app.put(
   ) => {
     const { no } = req.params;
     const { key, member } = req.body;
+    const trimmedKey = key?.trim();
 
     if (!/^\d+$/.test(no)) {
       return res.status(400).json({ error: "잘못된 요청입니다." });
     }
-    if (!key || !key.trim()) {
+    if (!trimmedKey) {
       return res.status(400).json({ error: "라이선스 키는 필수 항목입니다." });
     }
 
     try {
       const result = await pool.query(
         "UPDATE LICENSE_KEYS SET key = $1, member = $2 WHERE no = $3 AND isdelete = 0 RETURNING *",
-        [key, member, no],
+        [trimmedKey, member, no],
       );
 
       if (result.rows.length === 0) {
@@ -324,11 +305,18 @@ app.delete(
 // 배포할 때 "relation does not exist" 에러를 방지할 수 있다.
 let server: ReturnType<typeof app.listen>;
 
-initSchema().then(() => {
-  server = app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+initSchema()
+  .then(() => {
+    server = app.listen(PORT, () => {
+      console.log(`Server is running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    // 스키마 초기화가 실패한 상태로 기동하면 이후 모든 요청이 "relation does not
+    // exist" 등으로 조용히 실패하므로, 리스닝을 시작하지 않고 즉시 종료한다.
+    console.error("스키마 초기화 실패로 서버를 시작할 수 없습니다:", err);
+    pool.end().finally(() => process.exit(1));
   });
-});
 
 function shutdown() {
   if (!server) {

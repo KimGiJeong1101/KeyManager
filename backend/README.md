@@ -19,7 +19,7 @@ backend/
 ├── src/
 │   ├── server.ts     # Express 앱, 라우트 핸들러 전부 (health/items/category-stats/CRUD)
 │   ├── db.ts         # PostgreSQL 커넥션 풀 설정 + 테이블/인덱스 자동 생성(initSchema)
-│   ├── constants.ts  # category/version 화이트리스트 (프론트 옵션과 동일하게 유지)
+│   ├── constants.ts  # category/version 화이트리스트 (GET /categories로 프론트에 그대로 제공하는 단일 소스)
 │   └── types.ts      # LicenseKeyRow, CategoryStatRow 등 요청/응답 타입
 ├── dist/           # tsc 빌드 산출물 (git 추적 안 함, npm run build로 생성)
 ├── tsconfig.json
@@ -113,6 +113,21 @@ WHERE isdelete = 0;
 ```
 Response 200: { "status": "ok" }
 Response 503: { "status": "error" }
+```
+
+---
+
+### `GET /categories`
+등록 폼의 category → version 화이트리스트(`src/constants.ts`)를 그대로 반환한다.
+프론트는 이 값을 별도로 하드코딩하지 않고 그대로 사용한다.
+
+```
+Response 200:
+{
+  "Windows": ["Windows 11 Pro", ...],
+  "MS_Office": ["Microsoft 365 Business", ...],
+  "Hancom": ["한컴오피스 2024", ...]
+}
 ```
 
 ---

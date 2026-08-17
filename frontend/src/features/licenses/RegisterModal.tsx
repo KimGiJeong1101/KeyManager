@@ -11,21 +11,16 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
 import SelectField from "../../components/ui/SelectField";
-import { Category } from "../../types/item";
 import { SelectOption } from "../../types/ui";
-
-const CATEGORY_OPTIONS: SelectOption[] = [
-  { value: "Windows", label: "Windows" },
-  { value: "MS_Office", label: "MS_Office" },
-  { value: "Hancom", label: "Hancom" },
-];
 
 interface RegisterModalProps {
   open: boolean;
   category: string;
   version: string;
   keys: string[];
-  versionOptions: Record<Category, string[]>;
+  // 백엔드(GET /categories)에서 받아온 category → version 화이트리스트.
+  // 카테고리 선택지 자체도 이 목록의 키에서 도출한다(별도 하드코딩 없음).
+  versionOptions: Record<string, string[]>;
   isKeyComplete: boolean;
   // isSubmitting: 등록 요청이 진행 중인 동안 버튼을 비활성화해 중복 클릭을 막는다.
   isSubmitting?: boolean;
@@ -55,6 +50,12 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  // 카테고리 선택지를 versionOptions의 키에서 도출한다 (백엔드 화이트리스트와 항상 일치).
+  const categoryOptions: SelectOption[] = Object.keys(versionOptions).map((value) => ({
+    value,
+    label: value,
+  }));
+
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !isSubmitting && onClose()}>
       <DialogContent onOpenAutoFocus={(e) => {
@@ -86,7 +87,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
                 aria-label="카테고리 선택"
                 value={category}
                 onChange={onCategoryChange}
-                options={CATEGORY_OPTIONS}
+                options={categoryOptions}
                 placeholder="카테고리 선택"
               />
             </div>
@@ -102,7 +103,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
                 onChange={onVersionChange}
                 options={
                   category
-                    ? versionOptions[category as Category].map((v) => ({ value: v, label: v }))
+                    ? (versionOptions[category] ?? []).map((v) => ({ value: v, label: v }))
                     : []
                 }
                 placeholder={category ? "버전 선택" : "카테고리 선택 우선"}

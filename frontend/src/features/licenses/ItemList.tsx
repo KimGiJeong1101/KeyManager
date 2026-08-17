@@ -17,12 +17,14 @@ import { KeyRound, User, Unlock, ChevronDown, Plus, Pencil, Trash2 } from "lucid
 import {
   createItem,
   deleteItemRequest,
+  getCategories,
   getCategoryStats,
   getErrorMessage,
   getItems,
   updateItemRequest,
 } from "../../api/items";
-import { Category, CategoryStat, Item, SearchField, StatusFilter } from "../../types/item";
+import { CategoryStat, CategoryVersions, Item, SearchField, StatusFilter } from "../../types/item";
+import { resolveValidPage } from "../../lib/pagination";
 
 // 토스트 액션별 아이콘 (성공/중립 토스트에서 등록·수정·삭제를 구분해서 보여주기 위함)
 const TOAST_ICON: Record<string, ReactNode> = {
@@ -35,46 +37,6 @@ const TOAST_ICON: Record<string, ReactNode> = {
 // 컴포넌트 외부 상수 선언
 // 렌더링마다 재생성되지 않도록 모듈 스코프에 고정.
 // ─────────────────────────────────────────────
-
-// 카테고리별 버전 목록 (카테고리 select → 버전 select 연동에 사용)
-const VERSION_OPTIONS: Record<Category, string[]> = {
-  Windows: [
-    "Windows 11 Pro",
-    "Windows 11 Home",
-    "Windows 11 Enterprise",
-    "Windows 10 Pro",
-    "Windows 10 Home",
-    "Windows 10 Enterprise",
-    "Windows 8.1 Pro",
-    "Windows 7 Professional",
-    "Windows 7 Ultimate",
-    "Windows Server 2022 Standard",
-    "Windows Server 2019 Standard",
-    "Windows Server 2016 Standard",
-    "Windows Server 2012 R2",
-    "Windows Server 2008 R2",
-  ],
-  MS_Office: [
-    "Microsoft 365 Business",
-    "Microsoft 365 Apps for Enterprise",
-    "Office 2021 Professional Plus",
-    "Office 2019 Professional Plus",
-    "Office 2016 Professional Plus",
-    "Office 2013 Professional",
-    "Office 2010 Professional Plus",
-    "Office 2007 Standard",
-  ],
-  Hancom: [
-    "한컴오피스 2024",
-    "한컴오피스 2022",
-    "한컴오피스 2020",
-    "한컴오피스 2018",
-    "한컴오피스 2014 VP",
-    "한컴오피스 2010 SE",
-    "한컴오피스 한글 2010",
-    "한컴오피스 한글 2007",
-  ],
-};
 
 const ITEMS_PER_PAGE = 10;
 const PAGES_TO_SHOW = 5;
@@ -136,6 +98,9 @@ const ItemList: React.FC = () => {
   const [version, setVersion] = useState("");
   // categoryStats: 상단 통계 카드용 집계 데이터
   const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
+  // versionOptions: 등록 폼의 category → version 화이트리스트. 백엔드(GET /categories)에서
+  // 받아오며, 프론트에 별도로 하드코딩하지 않는다(값이 어긋나는 것을 방지).
+  const [versionOptions, setVersionOptions] = useState<CategoryVersions>({});
 
   // ── 2. 필터 및 검색 상태 ─────────────────────────
   const [selectedCategory, setSelectedCategory] = useState("allassets");
@@ -184,6 +149,16 @@ const ItemList: React.FC = () => {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const categories = await getCategories();
+      setVersionOptions(categories);
+    } catch (error) {
+      console.error("카테고리 목록 로딩 실패:", error);
+      toast.error("카테고리 목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    }
+  };
+
   const fetchItems = async (page: number) => {
     setIsLoading(true);
     try {
@@ -195,6 +170,19 @@ const ItemList: React.FC = () => {
         searchField: searchType,
         searchValue: searchTerm,
       });
+      // 현재 페이지가 삭제 등으로 더 이상 존재하지 않게 된 경우(예: 마지막 페이지의
+      // 유일한 항목을 삭제) 유효한 마지막 페이지로 되돌린다. currentPage가 바뀌면
+      // 아래 useEffect가 그 페이지로 다시 fetchItems를 호출한다.
+      const validPage = resolveValidPage(
+        page,
+        response.total,
+        ITEMS_PER_PAGE,
+        response.items.length,
+      );
+      if (validPage !== page) {
+        setCurrentPage(validPage);
+        return;
+      }
       setItems(response.items);
       setTotalItems(response.total);
     } catch (error) {
@@ -329,9 +317,10 @@ const ItemList: React.FC = () => {
 
   // ── useEffect ────────────────────────────────────
 
-  // 통계는 마운트 시 1회만 호출 (필터/검색과 무관)
+  // 통계와 카테고리 화이트리스트는 마운트 시 1회만 호출 (필터/검색과 무관)
   useEffect(() => {
     fetchCategoryStats();
+    fetchCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -415,7 +404,7 @@ const ItemList: React.FC = () => {
         category={category}
         version={version}
         keys={keys}
-        versionOptions={VERSION_OPTIONS}
+        versionOptions={versionOptions}
         isKeyComplete={isKeyComplete}
         isSubmitting={isSubmitting}
         onCategoryChange={handleCategorySelect}

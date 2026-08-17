@@ -1,5 +1,5 @@
 // 라이선스 등록 시 허용되는 category/version 화이트리스트.
-// frontend/src/features/licenses/ItemList.tsx의 VERSION_OPTIONS와 동일하게 유지한다.
+// 단일 소스: 프론트엔드는 이 값을 하드코딩하지 않고 GET /categories로 그대로 받아간다.
 
 export const VERSION_OPTIONS: Record<string, string[]> = {
   Windows: [
