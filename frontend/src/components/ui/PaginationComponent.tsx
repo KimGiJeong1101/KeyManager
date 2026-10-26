@@ -43,18 +43,19 @@ const PaginationComponent: React.FC<PaginationComponentProps> = ({
     "text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200";
 
   // pointer-events-none으로 클릭 이벤트 자체를 차단 (disabled 속성 대신)
+  // 첫/마지막 페이지 버튼은 좁은 화면(sm 미만)에서 숨겨 한 줄에 들어가도록 한다.
   const btnDisabled =
     "opacity-40 cursor-not-allowed text-slate-400 pointer-events-none dark:text-slate-700";
 
   return (
     <div className="flex items-center justify-center py-2">
-      <nav aria-label="페이지네이션" className="flex flex-wrap items-center justify-center gap-1 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-sm dark:bg-white/5 dark:border-white/10 dark:shadow-none">
+      <nav aria-label="페이지네이션" className="flex items-center justify-center gap-1 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-sm dark:bg-white/5 dark:border-white/10 dark:shadow-none">
         {/* 첫 페이지로 이동 */}
         <button
           disabled={currentPage === 1}
           onClick={() => onPageChange(1)}
           aria-label="첫 페이지로 이동"
-          className={cn(btnBase, currentPage === 1 ? btnDisabled : btnInactive)}
+          className={cn(btnBase, "hidden sm:flex", currentPage === 1 ? btnDisabled : btnInactive)}
         >
           <ChevronsLeft size={16} />
         </button>
@@ -106,7 +107,7 @@ const PaginationComponent: React.FC<PaginationComponentProps> = ({
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(totalPages)}
           aria-label="마지막 페이지로 이동"
-          className={cn(btnBase, currentPage === totalPages ? btnDisabled : btnInactive)}
+          className={cn(btnBase, "hidden sm:flex", currentPage === totalPages ? btnDisabled : btnInactive)}
         >
           <ChevronsRight size={16} />
         </button>

@@ -33,15 +33,15 @@ describe("parsePagination", () => {
 });
 
 describe("buildItemsFilter", () => {
-  it("필터가 없으면 isdelete = 0 조건만 남는다", () => {
+  it("필터가 없으면 삭제되지 않은 행(NOT isdelete) 조건만 남는다", () => {
     const { baseQuery, queryParams } = buildItemsFilter({});
-    expect(baseQuery).toBe("FROM LICENSE_KEYS WHERE isdelete = 0");
+    expect(baseQuery).toBe("FROM LICENSE_KEYS WHERE NOT isdelete");
     expect(queryParams).toEqual([]);
   });
 
   it("category='allassets'는 필터를 걸지 않는다", () => {
     const { baseQuery, queryParams } = buildItemsFilter({ category: "allassets" });
-    expect(baseQuery).toBe("FROM LICENSE_KEYS WHERE isdelete = 0");
+    expect(baseQuery).toBe("FROM LICENSE_KEYS WHERE NOT isdelete");
     expect(queryParams).toEqual([]);
   });
 
@@ -53,17 +53,17 @@ describe("buildItemsFilter", () => {
 
   it("status=assigned/unassigned은 파라미터 없이 조건만 추가한다", () => {
     expect(buildItemsFilter({ status: "assigned" }).baseQuery).toContain(
-      "member IS NOT NULL AND member <> '사용자없음' AND member <> ''",
+      "AND member IS NOT NULL",
     );
     expect(buildItemsFilter({ status: "unassigned" }).baseQuery).toContain(
-      "member IS NULL OR member = '사용자없음' OR member = ''",
+      "AND member IS NULL",
     );
     expect(buildItemsFilter({ status: "unassigned" }).queryParams).toEqual([]);
   });
 
   it("그 외 status 값은 필터를 걸지 않는다", () => {
     expect(buildItemsFilter({ status: "all" }).baseQuery).toBe(
-      "FROM LICENSE_KEYS WHERE isdelete = 0",
+      "FROM LICENSE_KEYS WHERE NOT isdelete",
     );
   });
 
@@ -72,8 +72,22 @@ describe("buildItemsFilter", () => {
       searchField: "key",
       searchValue: "ABC",
     });
-    expect(baseQuery).toContain("AND key ILIKE $1");
+    expect(baseQuery).toContain("AND REPLACE(key, '-', '') ILIKE $1");
     expect(queryParams).toEqual(["%ABC%"]);
+  });
+
+  it("키 검색은 검색어의 하이픈/공백을 제거한다 (칸 경계를 걸친 검색 지원)", () => {
+    const { queryParams } = buildItemsFilter({
+      searchField: "key",
+      searchValue: "ABCDE-12 345",
+    });
+    expect(queryParams).toEqual(["%ABCDE12345%"]);
+  });
+
+  it("키 검색어가 하이픈뿐이면 아무것도 매칭하지 않는다", () => {
+    const { baseQuery, queryParams } = buildItemsFilter({ searchField: "key", searchValue: "--" });
+    expect(baseQuery).toContain("AND FALSE");
+    expect(queryParams).toEqual([]);
   });
 
   it("searchField='member'는 member ILIKE로 검색어를 바인딩한다", () => {
@@ -87,9 +101,28 @@ describe("buildItemsFilter", () => {
 
   it("searchField='all'(기본)은 key/member를 같은 파라미터로 OR 검색한다", () => {
     const { baseQuery, queryParams } = buildItemsFilter({ searchValue: "ABC" });
-    expect(baseQuery).toContain("AND (key ILIKE $1 OR member ILIKE $1)");
+    expect(baseQuery).toContain("AND (REPLACE(key, '-', '') ILIKE $1 OR member ILIKE $1 OR memo ILIKE $1)");
     // 파라미터가 한 번만 push되어 인덱스가 재사용되는지 확인
     expect(queryParams).toEqual(["%ABC%"]);
+  });
+
+  it("searchField='all'에서 검색어에 하이픈이 있으면 member는 원본, key는 하이픈 제거 값으로 검색한다", () => {
+    const { baseQuery, queryParams } = buildItemsFilter({ searchValue: "AB-CD" });
+    expect(baseQuery).toContain("AND (REPLACE(key, '-', '') ILIKE $2 OR member ILIKE $1 OR memo ILIKE $1)");
+    expect(queryParams).toEqual(["%AB-CD%", "%ABCD%"]);
+  });
+
+  it("searchField='memo'는 memo ILIKE로 검색한다", () => {
+    const { baseQuery, queryParams } = buildItemsFilter({ searchField: "memo", searchValue: "PC-01" });
+    expect(baseQuery).toContain("AND memo ILIKE $1");
+    expect(queryParams).toEqual(["%PC-01%"]);
+  });
+
+  it("searchField='all'에서 검색어가 하이픈뿐이면 member/memo만 검색한다", () => {
+    const { baseQuery, queryParams } = buildItemsFilter({ searchValue: "-" });
+    expect(baseQuery).toContain("AND (member ILIKE $1 OR memo ILIKE $1)");
+    expect(baseQuery).not.toContain("REPLACE");
+    expect(queryParams).toEqual(["%-%"]);
   });
 
   it("검색어의 %, _, \\ 는 리터럴로 취급되도록 이스케이프된다", () => {
@@ -99,7 +132,7 @@ describe("buildItemsFilter", () => {
 
   it("공백만 있는 검색어는 필터를 걸지 않는다", () => {
     const { baseQuery, queryParams } = buildItemsFilter({ searchValue: "   " });
-    expect(baseQuery).toBe("FROM LICENSE_KEYS WHERE isdelete = 0");
+    expect(baseQuery).toBe("FROM LICENSE_KEYS WHERE NOT isdelete");
     expect(queryParams).toEqual([]);
   });
 
@@ -111,7 +144,7 @@ describe("buildItemsFilter", () => {
       searchValue: "XYZ",
     });
     expect(baseQuery).toContain("AND category = $1");
-    expect(baseQuery).toContain("AND key ILIKE $2");
+    expect(baseQuery).toContain("AND REPLACE(key, '-', '') ILIKE $2");
     expect(queryParams).toEqual(["Windows", "%XYZ%"]);
   });
 });

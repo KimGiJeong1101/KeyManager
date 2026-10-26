@@ -3,6 +3,7 @@ import ItemList from "./features/licenses/ItemList";
 import { KeyRound, Moon, Sun } from "lucide-react";
 import { Toaster } from "./components/ui/sonner";
 import { checkHealth } from "./api/items";
+import { APP_VERSION } from "./config";
 
 const THEME_KEY = "km-theme";
 
@@ -144,7 +145,9 @@ const App: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-8">
           <div className="w-full h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent dark:via-white/10"></div>
           <div className="mt-5 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 tracking-wide">라이선스 관리 시스템 v2.1.0</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 tracking-wide">
+              라이선스 관리 시스템{APP_VERSION && ` v${APP_VERSION}`}
+            </p>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">© 2026 Admin Studio</p>
           </div>
         </div>

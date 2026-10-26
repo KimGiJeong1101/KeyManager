@@ -31,6 +31,13 @@ export interface BuiltItemsFilter {
   queryParams: string[];
 }
 
+// ILIKE의 와일드카드 문자(%, _)와 이스케이프 문자(\) 자체를 사용자가
+// 검색어에 입력했을 때 리터럴로 취급하도록 이스케이프한 뒤 부분 일치 패턴으로 감싼다.
+function toLikeTerm(value: string): string {
+  const escaped = value.replace(/[\\%_]/g, (match) => `\\${match}`);
+  return `%${escaped}%`;
+}
+
 // 카테고리 필터 + 사용 상태 필터 + 검색어 필터를 조합해 WHERE 절을 조립한다.
 // $ 인덱스는 항상 queryParams.length 기준으로 계산해 SQL 인젝션을 방지하는
 // 파라미터 바인딩을 유지한다.
@@ -39,7 +46,7 @@ export function buildItemsFilter(
 ): BuiltItemsFilter {
   const { category, status, searchField, searchValue } = query;
 
-  let baseQuery = "FROM LICENSE_KEYS WHERE isdelete = 0";
+  let baseQuery = "FROM LICENSE_KEYS WHERE NOT isdelete";
   const queryParams: string[] = [];
 
   // 1. 카테고리 필터
@@ -49,31 +56,52 @@ export function buildItemsFilter(
   }
 
   // 2. 사용 상태 필터
-  // 미사용 기준: member가 NULL / '사용자없음' / '' 중 하나 (category-stats와 동일한 기준)
+  // 미사용 기준: member IS NULL (db.ts initSchema에서 미배정 값을 NULL로 정규화함)
   if (status === "assigned") {
-    baseQuery += ` AND (member IS NOT NULL AND member <> '사용자없음' AND member <> '')`;
+    baseQuery += ` AND member IS NOT NULL`;
   } else if (status === "unassigned") {
-    baseQuery += ` AND (member IS NULL OR member = '사용자없음' OR member = '')`;
+    baseQuery += ` AND member IS NULL`;
   }
 
   // 3. 검색어 필터
   if (searchValue && searchValue.trim() !== "") {
-    // ILIKE의 와일드카드 문자(%, _)와 이스케이프 문자(\) 자체를 사용자가
-    // 검색어에 입력했을 때 리터럴로 취급하도록 이스케이프한다.
-    const escaped = searchValue.replace(/[\\%_]/g, (match) => `\\${match}`);
-    const term = `%${escaped}%`;
+    const trimmed = searchValue.trim();
+    // 키 검색은 하이픈/공백을 무시한다. DB에는 "XXXXX-XXXXX-..." 형식으로 저장되지만,
+    // "12345FGHIJ"처럼 하이픈 없이(또는 칸 경계를 걸쳐) 검색해도 찾을 수 있도록
+    // 검색어와 컬럼 양쪽에서 하이픈을 제거하고 비교한다.
+    const compactKey = trimmed.replace(/[-\s]/g, "");
+    const keyClause = (idx: number) => `REPLACE(key, '-', '') ILIKE $${idx}`;
+
     if (searchField === "key") {
-      queryParams.push(term);
-      baseQuery += ` AND key ILIKE $${queryParams.length}`;
+      if (compactKey) {
+        queryParams.push(toLikeTerm(compactKey));
+        baseQuery += ` AND ${keyClause(queryParams.length)}`;
+      } else {
+        // 하이픈/공백만 입력한 경우: 키로는 아무것도 매칭되지 않는다 (전체가 나오지 않도록)
+        baseQuery += ` AND FALSE`;
+      }
     } else if (searchField === "member") {
-      queryParams.push(term);
+      queryParams.push(toLikeTerm(trimmed));
       baseQuery += ` AND member ILIKE $${queryParams.length}`;
+    } else if (searchField === "memo") {
+      queryParams.push(toLikeTerm(trimmed));
+      baseQuery += ` AND memo ILIKE $${queryParams.length}`;
     } else {
-      // ALL 검색: key와 member 둘 다 같은 파라미터($idx)로 OR 검색
-      // → 파라미터를 한 번만 push하고 인덱스를 재사용
-      queryParams.push(term);
-      const idx = queryParams.length;
-      baseQuery += ` AND (key ILIKE $${idx} OR member ILIKE $${idx})`;
+      // ALL 검색: member/memo는 원본 검색어, key는 하이픈을 뺀 검색어로 OR 검색.
+      // 두 값이 같으면(검색어에 하이픈/공백이 없으면) 파라미터를 한 번만 push하고 인덱스를 재사용한다.
+      queryParams.push(toLikeTerm(trimmed));
+      const textIdx = queryParams.length;
+      const textClause = `member ILIKE $${textIdx} OR memo ILIKE $${textIdx}`;
+      if (!compactKey) {
+        baseQuery += ` AND (${textClause})`;
+      } else {
+        let keyIdx = textIdx;
+        if (compactKey !== trimmed) {
+          queryParams.push(toLikeTerm(compactKey));
+          keyIdx = queryParams.length;
+        }
+        baseQuery += ` AND (${keyClause(keyIdx)} OR ${textClause})`;
+      }
     }
   }
 

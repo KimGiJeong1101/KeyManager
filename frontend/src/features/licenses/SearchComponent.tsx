@@ -9,6 +9,7 @@ const FILTER_OPTIONS: SelectOption<SearchField>[] = [
   { value: "all", label: "전체" },
   { value: "key", label: "키" },
   { value: "member", label: "사용자" },
+  { value: "memo", label: "메모" },
 ];
 
 interface SearchComponentProps {
@@ -43,18 +44,18 @@ const SearchComponent: React.FC<SearchComponentProps> = ({ onSearch }) => {
           onChange={setFilterOption}
           options={FILTER_OPTIONS}
           aria-label="검색 필드 선택"
-          className="w-24 flex-shrink-0 border-none bg-transparent"
+          className="w-20 sm:w-24 flex-shrink-0 border-none bg-transparent"
         />
 
         {/* 구분선 */}
-        <div className="w-px h-5 bg-slate-300 mx-2 self-center dark:bg-white/10" />
+        <div className="w-px h-5 bg-slate-300 mx-1 sm:mx-2 self-center dark:bg-white/10" />
 
         {/* 검색 입력 */}
         <div className="flex-grow flex items-center px-1 min-w-0">
           <Search size={16} className="text-slate-400 mr-2 flex-shrink-0 dark:text-slate-500" />
           <input
             type="text"
-            placeholder="키 / 사용자 검색"
+            placeholder="키·사용자 검색"
             aria-label="검색어 입력"
             value={content}
             onChange={(e) => setContent(e.target.value)}

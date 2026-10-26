@@ -1,4 +1,4 @@
-import React, { KeyboardEvent, MutableRefObject } from "react";
+import React, { ClipboardEvent, KeyboardEvent, MutableRefObject } from "react";
 import { KeyRound } from "lucide-react";
 import {
   Dialog,
@@ -12,6 +12,8 @@ import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
 import SelectField from "../../components/ui/SelectField";
 import { SelectOption } from "../../types/ui";
+import { shouldSplitPaste } from "../../lib/licenseKey";
+import { getCategoryMeta } from "../../lib/categories";
 
 interface RegisterModalProps {
   open: boolean;
@@ -28,6 +30,8 @@ interface RegisterModalProps {
   onVersionChange: (value: string) => void;
   onKeyChange: (index: number, value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>, index: number) => void;
+  // 전체 키(하이픈 포함 등)를 붙여넣었을 때 여러 칸에 나눠 채운다
+  onKeyPaste: (index: number, text: string) => void;
   inputRefs: MutableRefObject<(HTMLInputElement | null)[]>;
   onSubmit: () => void;
   onClose: () => void;
@@ -46,6 +50,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
   onVersionChange,
   onKeyChange,
   onKeyDown,
+  onKeyPaste,
   inputRefs,
   onSubmit,
   onClose,
@@ -53,7 +58,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
   // 카테고리 선택지를 versionOptions의 키에서 도출한다 (백엔드 화이트리스트와 항상 일치).
   const categoryOptions: SelectOption[] = Object.keys(versionOptions).map((value) => ({
     value,
-    label: value,
+    label: getCategoryMeta(value).label,
   }));
 
   return (
@@ -69,10 +74,10 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
             </span>
             <div>
               <DialogTitle>라이선스 등록</DialogTitle>
-              <DialogDescription>카테고리와 버전, 25자리 제품 키를 입력하세요.</DialogDescription>
+              <DialogDescription>카테고리와 버전, 25자리 제품 키를 입력하세요. 전체 키를 붙여넣어도 됩니다.</DialogDescription>
             </div>
           </div>
-          <Badge variant={isKeyComplete ? "default" : "muted"} className="mr-8">
+          <Badge variant={isKeyComplete ? "default" : "muted"} className="mr-8 whitespace-nowrap flex-shrink-0">
             {isKeyComplete ? "준비 완료" : "입력 대기"}
           </Badge>
         </DialogHeader>
@@ -124,10 +129,17 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
                     value={key}
                     onChange={(e) => onKeyChange(index, e.target.value)}
                     onKeyDown={(e) => onKeyDown(e, index)}
+                    onPaste={(e: ClipboardEvent<HTMLInputElement>) => {
+                      const text = e.clipboardData.getData("text");
+                      // 5자 이하 영문/숫자는 기본 동작(onChange 검증)에 맡기고, 그 외만 가로챈다
+                      if (!shouldSplitPaste(text)) return;
+                      e.preventDefault();
+                      onKeyPaste(index, text);
+                    }}
                     ref={(el) => (inputRefs.current[index] = el)}
                     aria-labelledby="product-key-label"
                     aria-label={`${index + 1}번째 칸 (5자리)`}
-                    className="w-0 flex-1 min-w-0 h-10 text-center font-mono font-bold text-sm bg-background border border-input rounded-lg focus:ring-2 focus:ring-ring/40 focus:border-ring outline-none transition-all tracking-widest text-foreground placeholder:text-muted-foreground"
+                    className="w-0 flex-1 min-w-0 h-10 px-0 text-center font-mono font-bold text-xs sm:text-sm tracking-normal sm:tracking-widest bg-background border border-input rounded-lg focus:ring-2 focus:ring-ring/40 focus:border-ring outline-none transition-all text-foreground placeholder:text-muted-foreground"
                     placeholder="XXXXX"
                   />
                   {index < keys.length - 1 && (

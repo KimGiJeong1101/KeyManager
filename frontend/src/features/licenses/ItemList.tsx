@@ -9,22 +9,40 @@ import React, {
 import ItemListDisplay from "./ItemListDisplay";
 import PaginationComponent from "../../components/ui/PaginationComponent";
 import SearchComponent from "./SearchComponent";
+import StatCards from "./StatCards";
+import LowStockAlert from "./LowStockAlert";
+import HistoryDialog from "./HistoryDialog";
+import { HistoryTarget, historyTargetOf } from "./historyTarget";
+import TrashDialog from "./TrashDialog";
+import CsvDialog from "./CsvDialog";
+import EditItemDialog from "./EditItemDialog";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import RegisterModal from "./RegisterModal";
 import { Button } from "../../components/ui/button";
 import { toast } from "sonner";
-import { KeyRound, User, Unlock, ChevronDown, Plus, Pencil, Trash2 } from "lucide-react";
+import { Archive, FileSpreadsheet, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   createItem,
   deleteItemRequest,
   getCategories,
   getCategoryStats,
+  getVersionStats,
   getErrorMessage,
   getItems,
   updateItemRequest,
 } from "../../api/items";
-import { CategoryStat, CategoryVersions, Item, SearchField, StatusFilter } from "../../types/item";
+import {
+  CategoryStat,
+  CategoryVersions,
+  Item,
+  SearchField,
+  StatusFilter,
+  UpdateItemPayload,
+  VersionStat,
+} from "../../types/item";
 import { resolveValidPage } from "../../lib/pagination";
+import { distributePastedKey } from "../../lib/licenseKey";
+import { CATEGORY_META, getCategoryMeta } from "../../lib/categories";
 
 // 토스트 액션별 아이콘 (성공/중립 토스트에서 등록·수정·삭제를 구분해서 보여주기 위함)
 const TOAST_ICON: Record<string, ReactNode> = {
@@ -41,30 +59,9 @@ const TOAST_ICON: Record<string, ReactNode> = {
 const ITEMS_PER_PAGE = 10;
 const PAGES_TO_SHOW = 5;
 
-// 탭 이름 → API 파라미터 값 매핑
-// "전체" 탭은 서버에서 "allassets"로 처리 (카테고리 필터 없음)
-const CATEGORY_MAP: Record<string, string> = {
-  "전체": "allassets",
-  Windows: "Windows",
-  MS_Office: "MS_Office",
-  Hancom: "Hancom",
-};
-
-// 탭 버튼에 표시할 사람이 읽기 좋은 이름
-const TAB_LABELS = ["전체", "Windows", "MS_Office", "Hancom"];
-const TAB_DISPLAY: Record<string, string> = {
-  "전체": "전체",
-  Windows: "Windows",
-  MS_Office: "MS Office",
-  Hancom: "한컴오피스",
-};
-
-// 통계 호버 패널 등에서 카테고리 코드명 → 표시명 변환
-const CATEGORY_DISPLAY: Record<string, string> = {
-  Windows: "Windows",
-  MS_Office: "MS Office",
-  Hancom: "한컴오피스",
-};
+// "전체" 탭은 서버에 "allassets"로 전달된다 (카테고리 필터 없음).
+// 나머지 탭은 백엔드(GET /categories)의 카테고리 목록에서 도출한다 → 아래 categoryTabs 참고.
+const ALL_CATEGORY = "allassets";
 
 // 사용 상태 필터: 라벨 → API 파라미터 값 매핑
 const STATUS_MAP: Record<string, StatusFilter> = {
@@ -73,21 +70,6 @@ const STATUS_MAP: Record<string, StatusFilter> = {
   "미사용": "unassigned",
 };
 const STATUS_LABELS = ["전체", "사용 중", "미사용"];
-
-type StatDetailKey = "total" | "active" | "available";
-
-interface StatConfigItem {
-  label: string;
-  mainCount: number;
-  detailKey: StatDetailKey;
-  color: string;
-  topBorder: string;
-  hoverBg: string;
-  iconBg: string;
-  icon: ReactNode;
-  showBar: boolean;
-  barColor?: string;
-}
 
 const ItemList: React.FC = () => {
   // ── 1. 데이터 및 등록 관련 상태 ──────────────────
@@ -98,12 +80,14 @@ const ItemList: React.FC = () => {
   const [version, setVersion] = useState("");
   // categoryStats: 상단 통계 카드용 집계 데이터
   const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
+  // versionStats: 버전별 재고 (재고 부족 경고용). 통계와 같은 시점에 함께 갱신한다.
+  const [versionStats, setVersionStats] = useState<VersionStat[]>([]);
   // versionOptions: 등록 폼의 category → version 화이트리스트. 백엔드(GET /categories)에서
   // 받아오며, 프론트에 별도로 하드코딩하지 않는다(값이 어긋나는 것을 방지).
   const [versionOptions, setVersionOptions] = useState<CategoryVersions>({});
 
   // ── 2. 필터 및 검색 상태 ─────────────────────────
-  const [selectedCategory, setSelectedCategory] = useState("allassets");
+  const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORY);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchType, setSearchType] = useState<SearchField>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -122,10 +106,16 @@ const ItemList: React.FC = () => {
   // 같은 요청이 두 번 나가는 것을 막는다.
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  // historyTarget: 이력 모달에 띄울 대상 (null이면 닫힘)
+  const [historyTarget, setHistoryTarget] = useState<HistoryTarget | null>(null);
+  // isTrashOpen: 휴지통 모달 표시 여부
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
+  // editTarget: 수정 모달에 띄울 항목 (null이면 닫힘)
+  const [editTarget, setEditTarget] = useState<Item | null>(null);
+  // isCsvOpen: CSV 내보내기/가져오기 모달 표시 여부
+  const [isCsvOpen, setIsCsvOpen] = useState(false);
   // searchResetKey: 값이 바뀌면 SearchComponent가 리마운트되어 내부 검색어 입력이 초기화된다
   const [searchResetKey, setSearchResetKey] = useState(0);
-  // expandedStat: 탭/클릭으로 펼친 통계 카드의 label (터치 기기는 hover가 없어 클릭 토글 필요)
-  const [expandedStat, setExpandedStat] = useState<string | null>(null);
 
   // 키 입력칸 5개의 DOM 참조 (입력 완료 시 다음 칸으로 자동 포커스)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -135,14 +125,30 @@ const ItemList: React.FC = () => {
   // isFiltering: 탭/상태필터/검색 중 하나라도 기본값이 아니면 true.
   // 빈 목록이 "데이터가 아예 없음"인지 "필터 조건에 안 걸림"인지 구분하는 데 사용한다.
   const isFiltering =
-    selectedCategory !== "allassets" || statusFilter !== "all" || searchTerm !== "";
+    selectedCategory !== ALL_CATEGORY || statusFilter !== "all" || searchTerm !== "";
+
+  // 카테고리 탭: "전체" + 백엔드 카테고리 목록. /categories 응답 전(또는 실패 시)에는
+  // 표시 메타데이터에 등록된 카테고리로 대신 그려 탭이 비어 보이지 않게 한다.
+  const categoryTabs = useMemo(() => {
+    const loaded = Object.keys(versionOptions);
+    const categories = loaded.length > 0 ? loaded : Object.keys(CATEGORY_META);
+    return [
+      { value: ALL_CATEGORY, label: "전체" },
+      ...categories.map((c) => ({ value: c, label: getCategoryMeta(c).label })),
+    ];
+  }, [versionOptions]);
+
+  // fetchItems 요청 순번. 탭/필터를 빠르게 바꾸면 이전 요청의 응답이 나중에 도착해
+  // 최신 결과를 덮어쓸 수 있으므로, 가장 마지막에 보낸 요청의 응답만 반영한다.
+  const latestFetchId = useRef(0);
 
   // ── 데이터 통신 로직 ─────────────────────────────
 
   const fetchCategoryStats = async () => {
     try {
-      const stats = await getCategoryStats();
+      const [stats, versions] = await Promise.all([getCategoryStats(), getVersionStats()]);
       setCategoryStats(stats);
+      setVersionStats(versions);
     } catch (error) {
       console.error("통계 로딩 실패:", error);
       toast.error("통계를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
@@ -160,6 +166,8 @@ const ItemList: React.FC = () => {
   };
 
   const fetchItems = async (page: number) => {
+    const fetchId = ++latestFetchId.current;
+    const isStale = () => fetchId !== latestFetchId.current;
     setIsLoading(true);
     try {
       const response = await getItems({
@@ -170,6 +178,7 @@ const ItemList: React.FC = () => {
         searchField: searchType,
         searchValue: searchTerm,
       });
+      if (isStale()) return;
       // 현재 페이지가 삭제 등으로 더 이상 존재하지 않게 된 경우(예: 마지막 페이지의
       // 유일한 항목을 삭제) 유효한 마지막 페이지로 되돌린다. currentPage가 바뀌면
       // 아래 useEffect가 그 페이지로 다시 fetchItems를 호출한다.
@@ -186,16 +195,18 @@ const ItemList: React.FC = () => {
       setItems(response.items);
       setTotalItems(response.total);
     } catch (error) {
+      if (isStale()) return;
       console.error("Error fetching items:", error);
       toast.error("목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
-      setIsLoading(false);
+      // 더 최신 요청이 진행 중이면 로딩 표시는 그 요청이 끝낼 때 내린다.
+      if (!isStale()) setIsLoading(false);
     }
   };
 
   // 탭 클릭 시 카테고리를 API 파라미터로 변환하고 1페이지로 초기화
-  const handleCategoryChange = (tabName: string) => {
-    setSelectedCategory(CATEGORY_MAP[tabName] || tabName);
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategory(value);
     setCurrentPage(1);
   };
 
@@ -214,7 +225,7 @@ const ItemList: React.FC = () => {
 
   // 탭/상태필터/검색 조건을 모두 기본값으로 되돌린다 (빈 검색 결과 화면의 "필터 초기화" 버튼에서 사용)
   const resetFilters = () => {
-    setSelectedCategory("allassets");
+    setSelectedCategory(ALL_CATEGORY);
     setStatusFilter("all");
     setSearchType("all");
     setSearchTerm("");
@@ -281,11 +292,11 @@ const ItemList: React.FC = () => {
     }
   };
 
-  // 성공 시 true, 실패 시 false를 반환해 호출부(ItemListDisplay)가
-  // 실패한 경우 편집 모드를 계속 유지하도록 한다.
-  const updateItem = async (no: number, key: string, member: string): Promise<boolean> => {
+  // 성공 시 true, 실패 시 false를 반환해 호출부(EditItemDialog)가
+  // 실패한 경우 입력값을 유지한 채 모달을 열어두도록 한다.
+  const updateItem = async (no: number, payload: UpdateItemPayload): Promise<boolean> => {
     try {
-      await updateItemRequest(no, { key, member });
+      await updateItemRequest(no, payload);
       fetchItems(currentPage);
       fetchCategoryStats();
       toast.success("라이선스 정보가 수정되었습니다.", { icon: TOAST_ICON.edit });
@@ -308,6 +319,14 @@ const ItemList: React.FC = () => {
       inputRefs.current[index + 1]?.focus();
   };
 
+  // 전체 키("XXXXX-XXXXX-..." 또는 25자리)를 붙여넣으면 현재 칸부터 5자씩 나눠 채운다
+  const handlePaste = (index: number, text: string) => {
+    const result = distributePastedKey(keys, index, text);
+    if (!result) return;
+    setKeys(result.keys);
+    inputRefs.current[result.focusIndex]?.focus();
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>, index: number) => {
     // 현재 칸이 비어있을 때 Backspace → 이전 칸으로 포커스 이동
     if (event.key === "Backspace" && !keys[index] && index > 0)
@@ -321,7 +340,6 @@ const ItemList: React.FC = () => {
   useEffect(() => {
     fetchCategoryStats();
     fetchCategories();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 목록은 페이지, 카테고리, 사용 상태, 검색 조건이 바뀔 때마다 재조회
@@ -332,72 +350,47 @@ const ItemList: React.FC = () => {
 
   // ── useMemo ──────────────────────────────────────
 
-  // categoryStats 변경 시에만 전체 합계 재계산
-  const totalStats = useMemo(
-    () =>
-      categoryStats.reduce(
-        (acc, curr) => ({
-          total: acc.total + curr.total,
-          active: acc.active + curr.active,
-          available: acc.available + curr.available,
-        }),
-        { total: 0, active: 0, available: 0 },
-      ),
-    [categoryStats],
-  );
-
-  // 상단 통계 카드 3개의 설정값 (레이블, 숫자, 색상, 아이콘, 프로그레스 바)
-  const statConfig: StatConfigItem[] = useMemo(
-    () => [
-      {
-        label: "전체 라이선스",
-        mainCount: totalStats.total,
-        detailKey: "total",
-        color: "text-slate-900 dark:text-slate-100",
-        topBorder: "border-t-slate-400 dark:border-t-slate-600",
-        hoverBg: "hover:bg-slate-50 dark:hover:bg-white/[0.03]",
-        iconBg: "bg-slate-100 dark:bg-white/10",
-        icon: <KeyRound size={15} className="text-slate-500 dark:text-slate-300" />,
-        showBar: false,
-      },
-      {
-        label: "사용 중",
-        mainCount: totalStats.active,
-        detailKey: "active",
-        color: "text-emerald-600 dark:text-emerald-400",
-        topBorder: "border-t-emerald-500 dark:border-t-emerald-400",
-        hoverBg: "hover:bg-emerald-50 dark:hover:bg-emerald-500/[0.06]",
-        iconBg: "bg-emerald-100 dark:bg-emerald-400/10",
-        icon: <User size={15} className="text-emerald-600 dark:text-emerald-400" />,
-        barColor: "bg-emerald-500 dark:bg-emerald-400",
-        showBar: true,
-      },
-      {
-        label: "미사용 (가용)",
-        mainCount: totalStats.available,
-        detailKey: "available",
-        color: "text-blue-600 dark:text-cyan-400",
-        topBorder: "border-t-blue-500 dark:border-t-cyan-400",
-        hoverBg: "hover:bg-blue-50 dark:hover:bg-cyan-400/[0.06]",
-        iconBg: "bg-blue-100 dark:bg-cyan-400/10",
-        icon: <Unlock size={15} className="text-blue-600 dark:text-cyan-400" />,
-        barColor: "bg-blue-500 dark:bg-cyan-400",
-        showBar: true,
-      },
-    ],
-    [totalStats],
-  );
-
   return (
     <div className="bg-white dark:bg-transparent rounded-2xl overflow-hidden">
       <ConfirmDialog
         open={deleteTarget !== null}
         title="라이선스 삭제"
-        message="이 자산을 삭제하시겠습니까? 삭제된 항목은 목록에서 즉시 사라집니다."
+        message="이 자산을 삭제하시겠습니까? 삭제된 항목은 휴지통으로 이동하며, 필요하면 복구할 수 있습니다."
         confirmLabel="삭제"
         isConfirming={isDeleting}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+      <HistoryDialog target={historyTarget} onClose={() => setHistoryTarget(null)} />
+      <EditItemDialog
+        item={editTarget}
+        versionOptions={versionOptions}
+        onSave={updateItem}
+        onClose={() => setEditTarget(null)}
+      />
+      <CsvDialog
+        open={isCsvOpen}
+        onClose={() => setIsCsvOpen(false)}
+        currentFilter={{
+          category: selectedCategory,
+          status: statusFilter,
+          searchField: searchType,
+          searchValue: searchTerm,
+        }}
+        currentCount={totalItems}
+        isFiltering={isFiltering}
+        onImported={() => {
+          fetchItems(currentPage);
+          fetchCategoryStats();
+        }}
+      />
+      <TrashDialog
+        open={isTrashOpen}
+        onClose={() => setIsTrashOpen(false)}
+        onRestored={() => {
+          fetchItems(currentPage);
+          fetchCategoryStats();
+        }}
       />
       <RegisterModal
         open={isRegisterOpen}
@@ -411,105 +404,15 @@ const ItemList: React.FC = () => {
         onVersionChange={setVersion}
         onKeyChange={handleChange}
         onKeyDown={handleKeyDown}
+        onKeyPaste={handlePaste}
         inputRefs={inputRefs}
         onSubmit={addItems}
         onClose={() => setIsRegisterOpen(false)}
       />
 
-      {/* 1. 상단 통계 카드
-          호버 시 슬라이드 애니메이션으로 카테고리별 세부 수치 표시 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-white/10 border-b border-slate-200 dark:border-white/10">
-        {statConfig.map((stat) => {
-          const isExpanded = expandedStat === stat.label;
-          return (
-          <button
-            type="button"
-            key={stat.label}
-            onClick={() =>
-              setExpandedStat((prev) => (prev === stat.label ? null : stat.label))
-            }
-            aria-expanded={isExpanded}
-            aria-label={`${stat.label} 카테고리별 상세 보기`}
-            className={`group relative overflow-hidden transition-all duration-300 border-t-2 w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-inset ${stat.topBorder} ${stat.hoverBg}`}
-          >
-            {/* 기본 뷰: 아이콘 + 레이블 + 숫자 + 프로그레스 바 */}
-            <div
-              className={`p-6 transition-all duration-300 group-hover:opacity-0 group-hover:-translate-y-3 ${
-                isExpanded ? "opacity-0 -translate-y-3" : ""
-              }`}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] font-semibold tracking-widest uppercase text-slate-500 dark:text-slate-400">
-                  {stat.label}
-                </p>
-                <span className={`flex items-center justify-center w-6 h-6 rounded-lg ${stat.iconBg}`}>
-                  {stat.icon}
-                </span>
-              </div>
-              <p className={`text-4xl font-bold tracking-tight ${stat.color}`}>
-                {stat.mainCount}
-              </p>
-              {stat.showBar && (
-                <div className="mt-3">
-                  <div className="h-1 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${stat.barColor} rounded-full transition-all duration-700`}
-                      style={{
-                        width: `${totalStats.total > 0 ? Math.round((stat.mainCount / totalStats.total) * 100) : 0}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5">
-                    전체의{" "}
-                    <span className={stat.color}>
-                      {totalStats.total > 0
-                        ? Math.round((stat.mainCount / totalStats.total) * 100)
-                        : 0}
-                      %
-                    </span>
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* 카테고리별 상세를 펼쳐볼 수 있다는 발견성 힌트 (호버/펼침 시에는 사라짐) */}
-            <span
-              className={`absolute bottom-2.5 right-3 text-slate-300 dark:text-slate-600 transition-opacity duration-200 group-hover:opacity-0 ${
-                isExpanded ? "opacity-0" : ""
-              }`}
-            >
-              <ChevronDown size={16} />
-            </span>
-
-            {/* 호버/탭 뷰: 카테고리별 세부 수치 (아래에서 슬라이드 업) */}
-            <div
-              className={`absolute inset-0 p-5 bg-white dark:bg-slate-900 group-hover:translate-y-0 transition-transform duration-300 flex flex-col justify-center ${
-                isExpanded ? "translate-y-0" : "translate-y-full"
-              }`}
-            >
-              <p className="text-[9px] font-semibold tracking-widest text-slate-500 dark:text-slate-400 mb-2 uppercase pb-1.5 border-b border-slate-200 dark:border-white/10">
-                카테고리별
-              </p>
-              <div className="space-y-1">
-                {categoryStats.map((cat) => (
-                  <div
-                    key={cat.category}
-                    className="flex justify-between items-center text-xs font-medium"
-                  >
-                    <span className="text-slate-500 dark:text-slate-400">
-                      {CATEGORY_DISPLAY[cat.category] || cat.category}
-                    </span>
-                    <span className={`${stat.color}`}>
-                      {cat[stat.detailKey]}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </button>
-          );
-        })}
-      </div>
+      {/* 1. 상단 통계 카드 */}
+      <StatCards categoryStats={categoryStats} />
+      <LowStockAlert versionStats={versionStats} />
 
       {/* 2. 통합 툴바: 카테고리 탭 + 사용 상태 필터 + 검색 + 등록 버튼을 한 줄에 배치
           클릭 시 selectedCategory / statusFilter 변경 → useEffect가 목록 재조회 */}
@@ -517,17 +420,17 @@ const ItemList: React.FC = () => {
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
           {/* 카테고리 탭 */}
           <div className="flex items-center overflow-x-auto scrollbar-hide flex-shrink-0">
-            {TAB_LABELS.map((tab) => (
+            {categoryTabs.map((tab) => (
               <button
-                key={tab}
-                onClick={() => handleCategoryChange(tab)}
+                key={tab.value}
+                onClick={() => handleCategoryChange(tab.value)}
                 className={`px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap ${
-                  selectedCategory === (CATEGORY_MAP[tab] || tab)
+                  selectedCategory === tab.value
                     ? "text-blue-600 bg-blue-50 dark:text-cyan-300 dark:bg-cyan-400/10"
                     : "text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-white/5"
                 }`}
               >
-                {TAB_DISPLAY[tab]}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -555,6 +458,32 @@ const ItemList: React.FC = () => {
               <SearchComponent key={searchResetKey} onSearch={handleSearchRequest} />
             </div>
 
+            {/* CSV 내보내기/가져오기. 글자는 툴바가 두 줄로 쌓이는 sm~xl 구간에서만 보인다:
+                xl 이상은 탭과 한 줄에 놓여 공간이 빠듯하고(콘텐츠 폭이 max-w-6xl로 고정), sm 미만은 너무 좁다 */}
+            <Button
+              variant="ghost"
+              onClick={() => setIsCsvOpen(true)}
+              aria-label="CSV 내보내기/가져오기"
+              title="CSV 내보내기/가져오기"
+              className="px-2.5 sm:px-3 text-slate-500 dark:text-slate-400"
+            >
+              <FileSpreadsheet size={17} />
+              <span className="hidden sm:inline xl:hidden">CSV</span>
+            </Button>
+
+            {/* 휴지통: 삭제된 라이선스 확인/복구.
+                각 행의 삭제(휴지통) 아이콘과 헷갈리지 않도록 보관함 아이콘 + 글자로 구분한다 (글자 표시 구간은 CSV 버튼과 동일) */}
+            <Button
+              variant="ghost"
+              onClick={() => setIsTrashOpen(true)}
+              aria-label="휴지통 열기"
+              title="휴지통"
+              className="px-2.5 sm:px-3 text-slate-500 dark:text-slate-400"
+            >
+              <Archive size={17} />
+              <span className="hidden sm:inline xl:hidden">휴지통</span>
+            </Button>
+
             {/* 등록 버튼: 클릭 시 등록 모달을 연다 */}
             <Button onClick={() => setIsRegisterOpen(true)} className="whitespace-nowrap">
               <Plus size={18} />
@@ -571,10 +500,11 @@ const ItemList: React.FC = () => {
             items={items}
             isLoading={isLoading}
             deleteItem={deleteItem}
-            updateItem={updateItem}
             isFiltering={isFiltering}
             onResetFilters={resetFilters}
             onOpenRegister={() => setIsRegisterOpen(true)}
+            onShowHistory={(item) => setHistoryTarget(historyTargetOf(item))}
+            onEdit={setEditTarget}
           />
         </div>
 
@@ -584,12 +514,15 @@ const ItemList: React.FC = () => {
             전체 <span className="text-slate-800 font-semibold dark:text-slate-200">{totalItems}</span>개 중{" "}
             <span className="text-slate-800 font-semibold dark:text-slate-200">{items.length}</span>개 표시
           </p>
-          <PaginationComponent
-            currentPage={currentPage}
-            totalPages={totalPages}
-            pagesToShow={PAGES_TO_SHOW}
-            onPageChange={setCurrentPage}
-          />
+          {/* 한 페이지뿐이면(검색 결과 0건 포함) 비활성 버튼만 보이므로 숨긴다 */}
+          {totalPages > 1 && (
+            <PaginationComponent
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pagesToShow={PAGES_TO_SHOW}
+              onPageChange={setCurrentPage}
+            />
+          )}
         </div>
       </div>
     </div>
